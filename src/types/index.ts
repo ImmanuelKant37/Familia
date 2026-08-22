@@ -61,6 +61,8 @@ export interface UserProfile {
   displayName: string;
   email: string;
   photoURL?: string;
+  phone?: string;
+  bio?: string;
   isAnonymous?: boolean;
   storageMode?: 'cloud' | 'local' | 'hybrid';
   createdAt: string;
@@ -299,6 +301,8 @@ export interface DuplicateMatch {
 // GIT-LIKE VERSION CONTROL & BRANCHING TYPES
 // ==========================================
 
+export type MergeStrategy = 'theirs' | 'ours' | 'manual';
+
 export interface CommitAuthor {
   userId: string;
   userName: string;
@@ -318,104 +322,108 @@ export interface TreeSnapshot {
 }
 
 export interface FieldDiff {
-  field: string;
+  fieldName?: string;
+  field?: string;
   fieldLabel: string;
   oldValue: any;
   newValue: any;
+  type?: 'added' | 'changed' | 'removed';
+}
+
+export interface EntityDelta {
+  entityId: string;
+  entityName: string;
+  entityType: 'person' | 'relationship' | 'event' | 'media' | 'source';
+  changeType: 'created' | 'modified' | 'deleted';
+  diffs?: FieldDiff[];
+  snapshotBefore?: any;
+  snapshotAfter?: any;
 }
 
 export interface CommitDelta {
-  action: 
-    | 'add_person' 
-    | 'edit_person' 
-    | 'delete_person' 
-    | 'add_relationship' 
-    | 'remove_relationship' 
-    | 'add_relative' 
-    | 'merge_branch' 
-    | 'rollback' 
-    | 'import' 
-    | 'manual_commit' 
-    | 'surname_style'
-    | 'bulk_update';
-  entityType?: 'person' | 'relationship' | 'event' | 'media' | 'source' | 'branch' | 'tree';
-  entityId?: string;
-  entityName?: string;
+  action?: string;
   details?: string;
   fieldDiffs?: FieldDiff[];
-  affectedPersonIds?: string[];
+  addedPeopleCount?: number;
+  modifiedPeopleCount?: number;
+  deletedPeopleCount?: number;
+  relationshipsCount?: number;
+  eventsCount?: number;
+  mediaCount?: number;
+  sourcesCount?: number;
+  entityDeltas?: EntityDelta[];
+  [key: string]: any;
 }
 
-export type MergeStrategy = 'ours' | 'theirs' | 'union';
-
 export interface TreeCommit {
-  id: string; // e.g. "c-a1b2c3d4"
-  shortHash: string; // e.g. "a1b2c3d"
+  id: string; // SHA-like hex ID or UUID
+  shortHash?: string;
   treeId: string;
   branchId: string;
-  branchName: string;
-  parentCommitId: string | null;
+  branchName?: string;
+  parentCommitId: string | null; // null for initial commit
+  secondParentCommitId?: string | null; // For merge commits
   message: string;
   author: CommitAuthor;
-  // Direct author accessors for convenience
   authorName?: string;
   authorPhoto?: string;
   isAnonymous?: boolean;
-  timestamp: string;
-  snapshot: TreeSnapshot;
-  delta?: CommitDelta;
   actionType?: string;
-  metadata?: {
-    diffs?: { fieldName: string; oldValue: any; newValue: any }[];
-    [key: string]: any;
-  };
+  metadata?: any;
+  timestamp: string;
+  snapshot: TreeSnapshot; // Full immutable snapshot for fast checkout & diff
+  delta?: CommitDelta;
+  isMerge?: boolean;
   isMergeCommit?: boolean;
   mergedFromBranchId?: string;
   mergedFromBranchName?: string;
-  tag?: string; // Optional tag e.g. "v1.0", "Hito Documental"
+  tag?: string; // Optional tag e.g. "v1.0-archivo-bautismal"
 }
 
 export interface TreeBranch {
   id: string;
   treeId: string;
-  name: string;
+  name: string; // e.g. "main", "rama-materna-gomez", "investigacion-1900"
   description?: string;
+  color?: string;
+  baseCommitId?: string;
+  headCommitId: string;
+  createdAt: string;
   createdBy: CommitAuthor;
   createdByName?: string;
-  createdAt: string;
+  isDefault: boolean; // true for "main"
+  status: 'active' | 'merged' | 'abandoned' | 'archived';
+  mergedIntoBranchId?: string;
+  mergedAt?: string;
   updatedAt?: string;
-  baseCommitId: string;
-  headCommitId: string;
-  isDefault?: boolean; // true for "main"
-  status: 'active' | 'merged' | 'archived';
-  lastActivityAt: string;
-  color?: string; // Hex or theme color for visual git tree
+  lastActivityAt?: string;
 }
 
 export interface BranchDiffSummary {
   sourceBranch: TreeBranch;
   targetBranch: TreeBranch;
-  sourceHeadCommit: TreeCommit | null;
-  targetHeadCommit: TreeCommit | null;
-  addedPeople: Person[];
-  modifiedPeople: {
-    person: Person;
-    before: Person;
-    after: Person;
-    changes: FieldDiff[];
-  }[];
-  deletedPeople: Person[];
-  addedRelationships: Relationship[];
-  deletedRelationships: Relationship[];
-  totalChangesCount: number;
-  hasConflicts: boolean;
-  conflicts: {
-    entityType: 'person' | 'relationship';
+  sourceHead?: TreeCommit;
+  sourceHeadCommit?: TreeCommit;
+  targetHead?: TreeCommit;
+  targetHeadCommit?: TreeCommit;
+  commonAncestorCommitId?: string | null;
+  aheadCount?: number;
+  behindCount?: number;
+  conflictEntities?: {
     entityId: string;
     entityName: string;
-    field: string;
-    fieldLabel: string;
-    targetValue: any;
-    sourceValue: any;
+    entityType: 'person' | 'relationship' | 'event';
+    sourceState: any;
+    targetState: any;
+    baseState?: any;
   }[];
+  cleanEntities?: EntityDelta[];
+  addedPeople?: Person[];
+  modifiedPeople?: { person: Person; changes: FieldDiff[] }[];
+  deletedPeople?: Person[];
+  addedRelationships?: Relationship[];
+  deletedRelationships?: Relationship[];
+  totalChangesCount?: number;
+  hasConflicts?: boolean;
+  conflicts?: any[];
 }

@@ -7,7 +7,7 @@ interface AuthScreenProps {
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
-  const { loginWithEmail, registerWithEmail, loginAsGuest, sendPasswordReset } = useAuth();
+  const { loginWithEmail, registerWithEmail, loginWithGoogle, loginAsGuest, sendPasswordReset } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -16,6 +16,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -23,28 +24,29 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
 
-  const getSpanishErrorMessage = (errorCode: string): string => {
-    switch (errorCode) {
-      case 'auth/email-already-in-use':
-        return 'Este correo electrónico ya está registrado. Por favor inicia sesión o utiliza otro correo.';
-      case 'auth/invalid-email':
-        return 'El formato de correo electrónico no es válido.';
-      case 'auth/weak-password':
-        return 'La contraseña debe tener al menos 6 caracteres.';
-      case 'auth/user-not-found':
-        return 'No existe una cuenta registrada con este correo electrónico. Por favor verifica o crea una cuenta.';
-      case 'auth/wrong-password':
-      case 'auth/invalid-credential':
-        return 'Contraseña o correo incorrectos. Por favor verifica tus credenciales.';
-      case 'auth/too-many-requests':
-        return 'Demasiados intentos fallidos. Por seguridad, espera unos minutos antes de intentar de nuevo.';
-      case 'auth/network-request-failed':
-        return 'Error de conexión con el servidor. Verifica tu conexión a internet.';
-      case 'auth/operation-not-allowed':
-        return 'El servicio de autenticación requiere verificación. Puedes pulsar "Acceder como Invitado" abajo para ingresar de inmediato.';
-      default:
-        return 'Ocurrió un error al procesar tu solicitud. Intenta nuevamente.';
+  const getSpanishErrorMessage = (err: any): string => {
+    const message = err?.message?.toLowerCase() || '';
+    const code = err?.code || '';
+
+    if (message.includes('invalid login credentials') || message.includes('invalid_credentials')) {
+      return 'Correo o contraseña incorrectos. Por favor verifica tus credenciales.';
     }
+    if (message.includes('user already registered') || message.includes('already registered')) {
+      return 'Este correo electrónico ya está registrado. Por favor inicia sesión.';
+    }
+    if (message.includes('password should be at least 6 characters') || code === 'auth/weak-password') {
+      return 'La contraseña debe tener al menos 6 caracteres.';
+    }
+    if (message.includes('invalid email') || message.includes('email format')) {
+      return 'El formato de correo electrónico no es válido.';
+    }
+    if (message.includes('rate limit') || message.includes('too many requests')) {
+      return 'Demasiados intentos. Por seguridad, espera unos minutos antes de intentar de nuevo.';
+    }
+    if (err?.message && !err.message.includes('supabase') && !err.message.includes('firebase')) {
+      return err.message;
+    }
+    return 'Ocurrió un error al procesar tu solicitud. Intenta nuevamente.';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,15 +90,21 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       if (onSuccess) onSuccess();
     } catch (err: any) {
       console.error('Auth error:', err);
-      const code = err?.code || '';
-      const message = err?.message;
-      if (message && typeof message === 'string' && !message.includes('Firebase') && !message.includes('auth/')) {
-        setErrorMsg(message);
-      } else {
-        setErrorMsg(getSpanishErrorMessage(code));
-      }
+      setErrorMsg(getSpanishErrorMessage(err));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg(null);
+    setGoogleLoading(true);
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      console.error('Google Auth error:', err);
+      setErrorMsg(getSpanishErrorMessage(err));
+      setGoogleLoading(false);
     }
   };
 
@@ -118,8 +126,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       setShowForgotModal(false);
       setResetEmail('');
     } catch (err: any) {
-      const code = err?.code || '';
-      setErrorMsg(getSpanishErrorMessage(code));
+      setErrorMsg(getSpanishErrorMessage(err));
     } finally {
       setResetLoading(false);
     }
@@ -137,12 +144,55 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             Familia
           </h1>
           <p className="text-sm text-[#7C796F] font-serif italic mt-1.5">
-            Árbol Genealógico & Archivo Familiar en la Nube
+            Árbol Genealógico & Archivo Familiar con Supabase
           </p>
         </div>
 
         {/* Auth Card */}
         <div className="bg-[#FDFBF7] rounded-3xl border border-[#D1CEC7] p-7 sm:p-9 shadow-sm">
+          {/* Google Sign In Button */}
+          <button
+            type="button"
+            disabled={googleLoading || loading || guestLoading}
+            onClick={handleGoogleSignIn}
+            className="w-full py-3 px-4 mb-5 bg-white hover:bg-[#F5F2ED] text-[#434331] font-sans font-semibold rounded-2xl border border-[#D1CEC7] shadow-2xs transition-all flex items-center justify-center space-x-3 text-sm cursor-pointer disabled:opacity-50"
+          >
+            {googleLoading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin text-[#5A5A40]" />
+                <span>Conectando con Google...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>Continuar con Google</span>
+              </>
+            )}
+          </button>
+
+          <div className="relative flex py-2 items-center mb-5">
+            <div className="flex-grow border-t border-[#E5E2D9]"></div>
+            <span className="flex-shrink mx-3 text-[11px] font-sans text-[#9A968A] uppercase tracking-wider">o con correo</span>
+            <div className="flex-grow border-t border-[#E5E2D9]"></div>
+          </div>
+
           {/* Tab Switcher */}
           <div className="flex bg-[#F5F2ED] p-1 rounded-2xl border border-[#E5E2D9] mb-6">
             <button
@@ -298,7 +348,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             <div className="pt-2 space-y-3">
               <button
                 type="submit"
-                disabled={loading || guestLoading}
+                disabled={loading || guestLoading || googleLoading}
                 className="w-full py-3 bg-[#5A5A40] hover:bg-[#434331] disabled:opacity-50 text-white font-sans font-semibold rounded-2xl shadow-xs transition-all flex items-center justify-center space-x-2 text-sm cursor-pointer"
               >
                 {loading ? (
@@ -322,7 +372,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
               <button
                 type="button"
-                disabled={loading || guestLoading}
+                disabled={loading || guestLoading || googleLoading}
                 onClick={async () => {
                   setGuestLoading(true);
                   setErrorMsg(null);
@@ -351,7 +401,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
           {/* Privacy Note */}
           <p className="text-[11px] text-center text-[#9A968A] mt-6 leading-relaxed font-sans">
-            Tus datos genealógicos se guardan de forma segura y sincronizada en la nube.
+            Tus datos genealógicos se guardan de forma segura y sincronizada en Supabase PostgreSQL.
           </p>
         </div>
       </div>
@@ -364,43 +414,35 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               Recuperar Contraseña
             </h3>
             <p className="text-xs text-[#7C796F] font-sans leading-relaxed">
-              Ingresa el correo electrónico asociado a tu cuenta y te enviaremos un enlace para restablecer tu contraseña.
+              Ingresa el correo electrónico asociado a tu cuenta de Supabase y te enviaremos un enlace para restablecer tu contraseña.
             </p>
 
             <form onSubmit={handleSendResetPassword} className="space-y-4">
               <div>
-                <label className="block text-xs font-sans font-medium text-[#5A5A40] mb-1.5">
-                  Correo Electrónico
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#9A968A]">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="email"
-                    required
-                    value={resetEmail}
-                    onChange={(e) => setResetEmail(e.target.value)}
-                    placeholder="tu@correo.com"
-                    className="w-full pl-10 pr-4 py-2 bg-white border border-[#D1CEC7] rounded-xl text-sm focus:outline-none focus:border-[#5A5A40]"
-                  />
-                </div>
+                <input
+                  type="email"
+                  required
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="tu@correo.com"
+                  className="w-full px-3.5 py-2.5 bg-white border border-[#D1CEC7] rounded-xl text-sm text-[#2C2C2C] focus:outline-none focus:border-[#5A5A40]"
+                />
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-2">
+              <div className="flex space-x-2">
                 <button
                   type="button"
                   onClick={() => setShowForgotModal(false)}
-                  className="px-4 py-2 text-xs font-sans font-semibold text-[#7C796F] hover:bg-[#F5F2ED] rounded-xl transition-colors cursor-pointer"
+                  className="flex-1 py-2.5 bg-[#F5F2ED] text-[#7C796F] text-xs font-semibold rounded-xl border border-[#D1CEC7] hover:bg-[#E5E2D9] cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={resetLoading}
-                  className="px-4 py-2 text-xs font-sans font-semibold bg-[#5A5A40] hover:bg-[#434331] text-white rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-2.5 bg-[#5A5A40] text-white text-xs font-semibold rounded-xl hover:bg-[#434331] disabled:opacity-50 flex items-center justify-center space-x-1 cursor-pointer"
                 >
-                  {resetLoading ? 'Enviando...' : 'Enviar Enlace'}
+                  {resetLoading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <span>Enviar</span>}
                 </button>
               </div>
             </form>
