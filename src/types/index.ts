@@ -100,6 +100,7 @@ export interface Tree {
   ownerEmail?: string;
   coverImage?: string;
   visibility: VisibilityLevel;
+  members?: TreeMember[];
   slug?: string;
   settings: TreeSettings;
   createdAt: string;

@@ -26,15 +26,16 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
   const getSpanishErrorMessage = (errorCode: string): string => {
     switch (errorCode) {
       case 'auth/email-already-in-use':
-        return 'Este correo electrónico ya está registrado. Por favor inicia sesión o recupera tu contraseña.';
+        return 'Este correo electrónico ya está registrado. Por favor inicia sesión o utiliza otro correo.';
       case 'auth/invalid-email':
         return 'El formato de correo electrónico no es válido.';
       case 'auth/weak-password':
         return 'La contraseña debe tener al menos 6 caracteres.';
+      case 'auth/user-not-found':
+        return 'No existe una cuenta registrada con este correo electrónico. Por favor verifica o crea una cuenta.';
       case 'auth/wrong-password':
       case 'auth/invalid-credential':
-      case 'auth/user-not-found':
-        return 'Correo o contraseña incorrectos. Por favor verifica tus credenciales.';
+        return 'Contraseña o correo incorrectos. Por favor verifica tus credenciales.';
       case 'auth/too-many-requests':
         return 'Demasiados intentos fallidos. Por seguridad, espera unos minutos antes de intentar de nuevo.';
       case 'auth/network-request-failed':
@@ -88,7 +89,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
     } catch (err: any) {
       console.error('Auth error:', err);
       const code = err?.code || '';
-      setErrorMsg(getSpanishErrorMessage(code));
+      const message = err?.message;
+      if (message && typeof message === 'string' && !message.includes('Firebase') && !message.includes('auth/')) {
+        setErrorMsg(message);
+      } else {
+        setErrorMsg(getSpanishErrorMessage(code));
+      }
     } finally {
       setLoading(false);
     }

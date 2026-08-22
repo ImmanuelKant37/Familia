@@ -103,8 +103,8 @@ const TreeContext = createContext<TreeContextType | undefined>(undefined);
 export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, activeRole, isPublicMode } = useAuth();
   
-  const [trees, setTrees] = useState<Tree[]>([SEED_TREE]);
-  const [activeTree, setActiveTree] = useState<Tree | null>(SEED_TREE);
+  const [trees, setTrees] = useState<Tree[]>([]);
+  const [activeTree, setActiveTree] = useState<Tree | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [events, setEvents] = useState<FamilyEvent[]>([]);
@@ -309,19 +309,33 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Initial load
   useEffect(() => {
     async function init() {
-      if (currentUser) {
-        await TreeService.initializeDefaultData(currentUser.userId);
-      }
-      const loadedTrees = await TreeService.getTrees(currentUser?.userId || 'guest');
+      setLoading(true);
+      const userId = currentUser?.userId || 'guest';
+      const userEmail = currentUser?.email || '';
+      const displayName = currentUser?.displayName || '';
+
+      const loadedTrees = await TreeService.getTrees(userId, userEmail, displayName);
       setTrees(loadedTrees);
       if (loadedTrees.length > 0) {
         const current = loadedTrees[0];
         setActiveTree(current);
         await loadTreeData(current.id);
+      } else {
+        setActiveTree(null);
+        setPeople([]);
+        setRelationships([]);
+        setEvents([]);
+        setMedia([]);
+        setSources([]);
+        setRequests([]);
+        setProposals([]);
+        setChanges([]);
+        setComments([]);
       }
+      setLoading(false);
     }
     init();
-  }, [currentUser, loadTreeData]);
+  }, [currentUser?.userId, currentUser?.email, loadTreeData]);
 
   const selectTree = async (treeId: string) => {
     const found = trees.find(t => t.id === treeId);
@@ -1812,13 +1826,16 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // Reset to original demo tree
+  // Reset / Load Demo Tree for exploration
   const resetToDemoTree = async () => {
     if (currentUser) {
-      await TreeService.initializeDefaultData(currentUser.userId);
-      setActiveTree(SEED_TREE);
-      await loadTreeData(SEED_TREE.id);
+      setLoading(true);
+      const demoTree = await TreeService.loadDemoTree(currentUser.userId);
+      setTrees(prev => [demoTree, ...prev.filter(t => t.id !== demoTree.id)]);
+      setActiveTree(demoTree);
+      await loadTreeData(demoTree.id);
       setSelectedPersonId(null);
+      setLoading(false);
     }
   };
 

@@ -17,82 +17,160 @@ import {
 
 export class TreeService {
   /**
-   * Initializes a default tree in Firestore for a user if they don't have one yet.
+   * Initializes a personalized, clean tree for a new user starting with their own record.
    */
-  static async initializeDefaultData(userId: string): Promise<Tree> {
-    const treeId = `tree-${userId.substring(0, 12)}`;
-    const defaultTree: Tree = {
-      ...SEED_TREE,
+  static async initializeUserTree(userId: string, displayName?: string, email?: string): Promise<Tree> {
+    const cleanName = displayName?.trim() || 'Familiar';
+    const nameParts = cleanName.split(' ');
+    const firstName = nameParts[0] || 'Investigador';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'Familiar';
+
+    const treeId = `tree-${userId.replace(/[^a-zA-Z0-9]/g, '').substring(0, 12)}-${Date.now().toString(36)}`;
+    const newTree: Tree = {
       id: treeId,
       ownerId: userId,
-      name: 'Mi Familia',
-      description: 'Árbol genealógico familiar interactivo con linajes y archivos históricos',
+      ownerName: cleanName,
+      ownerEmail: email || '',
+      name: lastName !== 'Familiar' ? `Familia ${lastName}` : `Árbol de ${firstName}`,
+      description: `Árbol genealógico y archivo histórico de la familia ${lastName !== 'Familiar' ? lastName : firstName}`,
+      coverImage: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1200&q=80',
+      visibility: 'private',
+      settings: {
+        hideLivingDetails: true,
+        livingAgeThreshold: 100,
+        defaultRoleForInvites: 'collaborator',
+        allowPublicRequests: true,
+        requireProposalApproval: true,
+        showCommentsToPublic: true,
+        surnameStyles: {}
+      },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
     try {
       const treeRef = doc(db, 'trees', treeId);
-      const snap = await getDoc(treeRef);
+      await setDoc(treeRef, cleanForFirestore(newTree));
 
-      if (!snap.exists()) {
-        await setDoc(treeRef, cleanForFirestore(defaultTree));
+      // Create initial root person for the user
+      const rootPerson: Person = {
+        id: `p-${Date.now()}-root`,
+        treeId: treeId,
+        firstName: firstName,
+        lastName: lastName !== 'Familiar' ? lastName : '',
+        gender: 'unknown',
+        isLiving: true,
+        bio: `Registro raíz del árbol familiar de ${cleanName}. Haz clic en los botones (+) para añadir a tus padres, cónyuge, hermanos e hijos.`,
+        certainty: 'confirmed',
+        position: { x: 400, y: 300 },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, `trees/${treeId}/people`, rootPerson.id), cleanForFirestore(rootPerson));
 
-        // Populate initial family structure in Firestore subcollections
-        const batch = writeBatch(db);
-        SEED_PEOPLE.forEach(p => {
-          batch.set(doc(db, `trees/${treeId}/people`, p.id), cleanForFirestore({ ...p, treeId }));
-        });
-        SEED_RELATIONSHIPS.forEach(r => {
-          batch.set(doc(db, `trees/${treeId}/relationships`, r.id), cleanForFirestore({ ...r, treeId }));
-        });
-        SEED_EVENTS.forEach(e => {
-          batch.set(doc(db, `trees/${treeId}/events`, e.id), cleanForFirestore({ ...e, treeId }));
-        });
-        SEED_MEDIA.forEach(m => {
-          batch.set(doc(db, `trees/${treeId}/media`, m.id), cleanForFirestore({ ...m, treeId }));
-        });
-        SEED_SOURCES.forEach(s => {
-          batch.set(doc(db, `trees/${treeId}/sources`, s.id), cleanForFirestore({ ...s, treeId }));
-        });
-        SEED_REQUESTS.forEach(req => {
-          batch.set(doc(db, `trees/${treeId}/requests`, req.id), cleanForFirestore({ ...req, treeId }));
-        });
-        SEED_PROPOSALS.forEach(prop => {
-          batch.set(doc(db, `trees/${treeId}/proposals`, prop.id), cleanForFirestore({ ...prop, treeId }));
-        });
-        SEED_CHANGES.forEach(c => {
-          batch.set(doc(db, `trees/${treeId}/changes`, c.id), cleanForFirestore({ ...c, treeId }));
-        });
-        SEED_COMMENTS.forEach(com => {
-          batch.set(doc(db, `trees/${treeId}/comments`, com.id), cleanForFirestore({ ...com, treeId }));
-        });
-        await batch.commit();
-      }
-      return defaultTree;
+      return newTree;
     } catch (err) {
-      console.error('Error initializing tree in Firestore:', err);
-      return defaultTree;
+      console.error('Error initializing clean tree in Firestore:', err);
+      return newTree;
+    }
+  }
+
+  /**
+   * Initializes the full Macondo Demo Tree only when explicitly requested
+   */
+  static async loadDemoTree(userId: string, customName?: string): Promise<Tree> {
+    const treeId = `tree-demo-${Date.now().toString(36)}`;
+    const demoTree: Tree = {
+      ...SEED_TREE,
+      id: treeId,
+      ownerId: userId,
+      name: customName || 'Familia Buendía (Ejemplo)',
+      description: 'Árbol genealógico de demostración para explorar funcionalidades',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    try {
+      const treeRef = doc(db, 'trees', treeId);
+      await setDoc(treeRef, cleanForFirestore(demoTree));
+
+      const batch = writeBatch(db);
+      SEED_PEOPLE.forEach(p => {
+        batch.set(doc(db, `trees/${treeId}/people`, p.id), cleanForFirestore({ ...p, treeId }));
+      });
+      SEED_RELATIONSHIPS.forEach(r => {
+        batch.set(doc(db, `trees/${treeId}/relationships`, r.id), cleanForFirestore({ ...r, treeId }));
+      });
+      SEED_EVENTS.forEach(e => {
+        batch.set(doc(db, `trees/${treeId}/events`, e.id), cleanForFirestore({ ...e, treeId }));
+      });
+      SEED_MEDIA.forEach(m => {
+        batch.set(doc(db, `trees/${treeId}/media`, m.id), cleanForFirestore({ ...m, treeId }));
+      });
+      SEED_SOURCES.forEach(s => {
+        batch.set(doc(db, `trees/${treeId}/sources`, s.id), cleanForFirestore({ ...s, treeId }));
+      });
+      SEED_CHANGES.forEach(c => {
+        batch.set(doc(db, `trees/${treeId}/changes`, c.id), cleanForFirestore({ ...c, treeId }));
+      });
+      await batch.commit();
+
+      return demoTree;
+    } catch (err) {
+      console.error('Error loading demo tree:', err);
+      return demoTree;
     }
   }
 
   // --- TREES ---
-  static async getTrees(userId: string): Promise<Tree[]> {
+  static async getTrees(userId: string, userEmail?: string, displayName?: string): Promise<Tree[]> {
     try {
-      // Find trees owned by the user or visible trees
-      const q = query(collection(db, 'trees'), where('ownerId', '==', userId));
-      const snapshot = await getDocs(q);
-      const list: Tree[] = [];
+      const cleanEmail = (userEmail || '').trim().toLowerCase();
+      // Fetch all trees in database and filter strictly by ownership or explicit membership
+      const snapshot = await getDocs(collection(db, 'trees'));
+      const ownedList: Tree[] = [];
+      const sharedList: Tree[] = [];
+
       snapshot.forEach(docSnap => {
-        list.push({ ...docSnap.data(), id: docSnap.id } as Tree);
+        const data = docSnap.data() as Tree;
+        const tree = { ...data, id: docSnap.id };
+
+        // 1. Is user the owner?
+        const isOwner = tree.ownerId === userId || (cleanEmail && tree.ownerEmail?.toLowerCase() === cleanEmail);
+        
+        // 2. Is user an invited member with granted role?
+        const isMember = Array.isArray(tree.members) && tree.members.some(m => 
+          (m.userId && m.userId === userId) || 
+          (cleanEmail && m.email && m.email.toLowerCase() === cleanEmail)
+        );
+
+        if (isOwner) {
+          ownedList.push(tree);
+        } else if (isMember) {
+          sharedList.push(tree);
+        }
       });
 
-      if (list.length > 0) {
-        return list;
+      const combined = [...ownedList, ...sharedList];
+      if (combined.length > 0) {
+        return combined;
       }
 
-      // If user has no trees yet, create initial default tree in Firestore
-      const initialTree = await TreeService.initializeDefaultData(userId);
+      // If user is guest/anonymous, return initial clean tree or demo
+      if (userId.startsWith('guest_') || userId === 'guest') {
+        const guestTree: Tree = {
+          ...SEED_TREE,
+          id: `tree-guest-${Date.now().toString(36)}`,
+          ownerId: userId,
+          name: 'Mi Árbol Familiar',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        return [guestTree];
+      }
+
+      // If registered user has no trees yet, create a fresh private tree for them
+      const initialTree = await TreeService.initializeUserTree(userId, displayName, cleanEmail);
       return [initialTree];
     } catch (e) {
       console.error('Error fetching trees from Firestore:', e);
