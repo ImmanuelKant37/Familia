@@ -26,7 +26,7 @@ export class TreeService {
       id: treeId,
       ownerId: userId,
       name: 'Mi Familia',
-      description: 'Árbol genealógico familiar interactivo almacenado en Firebase',
+      description: 'Árbol genealógico familiar interactivo con linajes y archivos históricos',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

@@ -1,6 +1,6 @@
 {
   "name": "Familia",
-  "description": "Plataforma de árbol genealógico familiar interactivo con registro e inicio de sesión por correo y contraseña en Firebase, sincronización en la nube en Firestore, gestión de linajes, relaciones y archivos históricos.",
+  "description": "Plataforma de árbol genealógico familiar interactivo con registro e inicio de sesión por correo y contraseña, sincronización en la nube, gestión de linajes, relaciones y archivos históricos.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -168,7 +168,7 @@ const MainAppContent: React.FC = () => {
         </div>
         <div className="flex items-center space-x-2 text-sm text-[#5A5A40] font-medium font-sans">
           <RefreshCw className="w-4 h-4 animate-spin" />
-          <span>Cargando árbol familiar en Firebase...</span>
+          <span>Cargando árbol familiar...</span>
         </div>
       </div>
     );

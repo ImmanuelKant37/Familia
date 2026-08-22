@@ -462,10 +462,10 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Storage Mode Badge */}
             <div 
               className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 bg-[#F5F2ED] rounded-full text-[11px] font-sans font-medium text-[#5A5A40] border border-[#D1CEC7]"
-              title="Sincronización en la base de datos de Firebase activa"
+              title="Sincronización en la nube activa"
             >
               <Cloud className="w-3 h-3 text-[#5A5A40]" />
-              <span>Nube Firebase</span>
+              <span>Sincronizado</span>
               <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
             </div>
 
@@ -475,7 +475,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <button
                   onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
                   className="flex items-center space-x-2 px-2.5 py-1.5 bg-[#F5F2ED] hover:bg-[#E5E2D9] rounded-full text-xs font-sans font-medium text-[#434331] border border-[#D1CEC7] transition-colors cursor-pointer"
-                  title="Cuenta y sesión en Firebase"
+                  title="Cuenta y perfil de usuario"
                 >
                   <div className="w-5 h-5 rounded-full bg-[#5A5A40] text-white flex items-center justify-center text-[10px] font-bold">
                     {currentUser.displayName?.[0]?.toUpperCase() || 'U'}

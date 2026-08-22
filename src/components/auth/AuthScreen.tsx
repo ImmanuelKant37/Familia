@@ -40,7 +40,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
       case 'auth/network-request-failed':
         return 'Error de conexión con el servidor. Verifica tu conexión a internet.';
       case 'auth/operation-not-allowed':
-        return 'El inicio de sesión con Correo y Contraseña aún no está habilitado en la consola de Firebase. Puedes activar el proveedor "Email/Password" en Firebase Console -> Authentication -> Sign-in method, o pulsar "Acceder como Invitado" abajo para ingresar de inmediato.';
+        return 'El servicio de autenticación requiere verificación. Puedes pulsar "Acceder como Invitado" abajo para ingresar de inmediato.';
       default:
         return 'Ocurrió un error al procesar tu solicitud. Intenta nuevamente.';
     }
@@ -131,7 +131,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
             Familia
           </h1>
           <p className="text-sm text-[#7C796F] font-serif italic mt-1.5">
-            Árbol Genealógico & Archivo Familiar en la Nube de Firebase
+            Árbol Genealógico & Archivo Familiar en la Nube
           </p>
         </div>
 
@@ -302,7 +302,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
                   </>
                 ) : (
                   <>
-                    <span>{mode === 'login' ? 'Entrar a Mi Árbol' : 'Registrarse en Firebase'}</span>
+                    <span>{mode === 'login' ? 'Entrar a Mi Árbol' : 'Crear mi Cuenta'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -345,7 +345,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
 
           {/* Privacy Note */}
           <p className="text-[11px] text-center text-[#9A968A] mt-6 leading-relaxed font-sans">
-            Tus datos genealógicos se guardan de forma segura y permanente en la base de datos de Firebase.
+            Tus datos genealógicos se guardan de forma segura y sincronizada en la nube.
           </p>
         </div>
       </div>
@@ -358,7 +358,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onSuccess }) => {
               Recuperar Contraseña
             </h3>
             <p className="text-xs text-[#7C796F] font-sans leading-relaxed">
-              Ingresa el correo electrónico asociado a tu cuenta de Firebase y te enviaremos un enlace para restablecer tu contraseña.
+              Ingresa el correo electrónico asociado a tu cuenta y te enviaremos un enlace para restablecer tu contraseña.
             </p>
 
             <form onSubmit={handleSendResetPassword} className="space-y-4">
