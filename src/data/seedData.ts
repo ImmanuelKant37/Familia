@@ -2,11 +2,11 @@ import { Tree, Person, Relationship, FamilyEvent, MediaItem, HistoricalSource, C
 
 export const SEED_TREE: Tree = {
   id: 'cantero-family-tree',
-  name: 'Familia Cantero & Gómez',
-  description: 'Historia y genealogía de la familia Cantero y Gómez desde su llegada desde España e Italia en 1850 hasta la actualidad.',
+  name: 'Familia',
+  description: 'Historia y genealogía familiar desde los ancestros originarios hasta las generaciones actuales.',
   ownerId: 'user-default-owner',
-  ownerName: 'Juan Carlos Cantero',
-  ownerEmail: 'juan.cantero@historiafamiliar.com',
+  ownerName: 'Investigador Familiar',
+  ownerEmail: 'familia@historiafamiliar.com',
   coverImage: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1200&q=80',
   visibility: 'public',
   slug: 'cantero-gomez',

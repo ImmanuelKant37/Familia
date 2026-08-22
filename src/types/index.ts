@@ -61,6 +61,8 @@ export interface UserProfile {
   displayName: string;
   email: string;
   photoURL?: string;
+  isAnonymous?: boolean;
+  storageMode?: 'cloud' | 'local' | 'hybrid';
   createdAt: string;
   lastLoginAt: string;
   privacyPreferences?: {
@@ -290,4 +292,129 @@ export interface DuplicateMatch {
   personB: Person;
   similarityScore: number; // 0 - 100
   reasons: string[];
+}
+
+// ==========================================
+// GIT-LIKE VERSION CONTROL & BRANCHING TYPES
+// ==========================================
+
+export interface CommitAuthor {
+  userId: string;
+  userName: string;
+  userEmail?: string;
+  userPhoto?: string;
+  isAnonymous?: boolean;
+  role?: MemberRole;
+}
+
+export interface TreeSnapshot {
+  people: Person[];
+  relationships: Relationship[];
+  events?: FamilyEvent[];
+  media?: MediaItem[];
+  sources?: HistoricalSource[];
+  surnameStyles?: Record<string, SurnameStyle>;
+}
+
+export interface FieldDiff {
+  field: string;
+  fieldLabel: string;
+  oldValue: any;
+  newValue: any;
+}
+
+export interface CommitDelta {
+  action: 
+    | 'add_person' 
+    | 'edit_person' 
+    | 'delete_person' 
+    | 'add_relationship' 
+    | 'remove_relationship' 
+    | 'add_relative' 
+    | 'merge_branch' 
+    | 'rollback' 
+    | 'import' 
+    | 'manual_commit' 
+    | 'surname_style'
+    | 'bulk_update';
+  entityType?: 'person' | 'relationship' | 'event' | 'media' | 'source' | 'branch' | 'tree';
+  entityId?: string;
+  entityName?: string;
+  details?: string;
+  fieldDiffs?: FieldDiff[];
+  affectedPersonIds?: string[];
+}
+
+export type MergeStrategy = 'ours' | 'theirs' | 'union';
+
+export interface TreeCommit {
+  id: string; // e.g. "c-a1b2c3d4"
+  shortHash: string; // e.g. "a1b2c3d"
+  treeId: string;
+  branchId: string;
+  branchName: string;
+  parentCommitId: string | null;
+  message: string;
+  author: CommitAuthor;
+  // Direct author accessors for convenience
+  authorName?: string;
+  authorPhoto?: string;
+  isAnonymous?: boolean;
+  timestamp: string;
+  snapshot: TreeSnapshot;
+  delta?: CommitDelta;
+  actionType?: string;
+  metadata?: {
+    diffs?: { fieldName: string; oldValue: any; newValue: any }[];
+    [key: string]: any;
+  };
+  isMergeCommit?: boolean;
+  mergedFromBranchId?: string;
+  mergedFromBranchName?: string;
+  tag?: string; // Optional tag e.g. "v1.0", "Hito Documental"
+}
+
+export interface TreeBranch {
+  id: string;
+  treeId: string;
+  name: string;
+  description?: string;
+  createdBy: CommitAuthor;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt?: string;
+  baseCommitId: string;
+  headCommitId: string;
+  isDefault?: boolean; // true for "main"
+  status: 'active' | 'merged' | 'archived';
+  lastActivityAt: string;
+  color?: string; // Hex or theme color for visual git tree
+}
+
+export interface BranchDiffSummary {
+  sourceBranch: TreeBranch;
+  targetBranch: TreeBranch;
+  sourceHeadCommit: TreeCommit | null;
+  targetHeadCommit: TreeCommit | null;
+  addedPeople: Person[];
+  modifiedPeople: {
+    person: Person;
+    before: Person;
+    after: Person;
+    changes: FieldDiff[];
+  }[];
+  deletedPeople: Person[];
+  addedRelationships: Relationship[];
+  deletedRelationships: Relationship[];
+  totalChangesCount: number;
+  hasConflicts: boolean;
+  conflicts: {
+    entityType: 'person' | 'relationship';
+    entityId: string;
+    entityName: string;
+    field: string;
+    fieldLabel: string;
+    targetValue: any;
+    sourceValue: any;
+  }[];
 }

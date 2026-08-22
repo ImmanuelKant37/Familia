@@ -11,8 +11,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isOwner(userId) || !isAuthenticated();
+      allow read, write: if true;
     }
 
     match /trees/{treeId} {

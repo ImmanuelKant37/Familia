@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <!-- Background Vintage Parchment Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#FDFBF7"/>
+      <stop offset="60%" stop-color="#F5F2ED"/>
+      <stop offset="100%" stop-color="#EBE7DE"/>
+    </radialGradient>
+    
+    <!-- Gold / Olive Accent Gradient -->
+    <linearGradient id="oliveGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#737352"/>
+      <stop offset="100%" stop-color="#434331"/>
+    </linearGradient>
+
+    <!-- Terracotta Gradient -->
+    <linearGradient id="terraGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C2735C"/>
+      <stop offset="100%" stop-color="#8C4936"/>
+    </linearGradient>
+
+    <!-- Shadow filter -->
+    <filter id="cardShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#434331" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+  
+  <!-- Outer Vintage Frame Lines -->
+  <rect x="24" y="24" width="1152" height="582" rx="24" fill="none" stroke="#D1CEC7" stroke-width="2"/>
+  <rect x="36" y="36" width="1128" height="558" rx="18" fill="none" stroke="#5A5A40" stroke-width="1" stroke-opacity="0.3" stroke-dasharray="6 4"/>
+
+  <!-- Left Side / Tree Graphic Emblem -->
+  <g transform="translate(140, 95)" filter="url(#cardShadow)">
+    <!-- Tree circular card base -->
+    <circle cx="220" cy="220" r="190" fill="#5A5A40"/>
+    <circle cx="220" cy="220" r="176" fill="none" stroke="#D1CEC7" stroke-width="2" stroke-opacity="0.4"/>
+    <circle cx="220" cy="220" r="168" fill="#FDFBF7"/>
+
+    <!-- Tree trunk & roots -->
+    <path d="M220 330 V240" stroke="#5A5A40" stroke-width="18" stroke-linecap="round"/>
+    <path d="M220 320 C180 335 150 345 120 350" stroke="#7C796F" stroke-width="10" stroke-linecap="round"/>
+    <path d="M220 320 C260 335 290 345 320 350" stroke="#7C796F" stroke-width="10" stroke-linecap="round"/>
+
+    <!-- Tree main branches -->
+    <path d="M220 240 C220 190 150 165 140 120" stroke="#5A5A40" stroke-width="14" stroke-linecap="round"/>
+    <path d="M220 240 C220 190 290 165 300 120" stroke="#5A5A40" stroke-width="14" stroke-linecap="round"/>
+    <path d="M220 240 V105" stroke="#5A5A40" stroke-width="14" stroke-linecap="round"/>
+
+    <!-- Secondary branches -->
+    <path d="M175 195 C140 180 105 170 95 130" stroke="#7C796F" stroke-width="9" stroke-linecap="round"/>
+    <path d="M265 195 C300 180 335 170 345 130" stroke="#7C796F" stroke-width="9" stroke-linecap="round"/>
+
+    <!-- Generational nodes (Leaves / Family Members) -->
+    <!-- Top Center Root -->
+    <circle cx="220" cy="85" r="22" fill="url(#terraGrad)" stroke="#FDFBF7" stroke-width="5"/>
+    
+    <!-- High Generation -->
+    <circle cx="140" cy="105" r="19" fill="#5A5A40" stroke="#FDFBF7" stroke-width="4"/>
+    <circle cx="300" cy="105" r="19" fill="#5A5A40" stroke="#FDFBF7" stroke-width="4"/>
+    
+    <!-- Outer Generations -->
+    <circle cx="90" cy="125" r="16" fill="url(#terraGrad)" stroke="#FDFBF7" stroke-width="3.5"/>
+    <circle cx="350" cy="125" r="16" fill="url(#terraGrad)" stroke="#FDFBF7" stroke-width="3.5"/>
+
+    <!-- Mid Generation Nodes -->
+    <circle cx="180" cy="150" r="14" fill="#5A5A40" stroke="#FDFBF7" stroke-width="3"/>
+    <circle cx="260" cy="150" r="14" fill="#5A5A40" stroke="#FDFBF7" stroke-width="3"/>
+  </g>
+
+  <!-- Right Side / Typography & Branding -->
+  <g transform="translate(620, 150)">
+    <!-- Heritage Tag -->
+    <rect x="0" y="0" width="220" height="34" rx="17" fill="#5A5A40" fill-opacity="0.1"/>
+    <text x="110" y="22" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="700" fill="#5A5A40" text-anchor="middle" letter-spacing="2.5">ÁRBOL GENEALÓGICO</text>
+
+    <!-- Main Title "Familia" -->
+    <text x="0" y="130" font-family="'Cinzel', 'Lora', serif" font-size="92" font-weight="700" fill="#434331" letter-spacing="1">Familia</text>
+
+    <!-- Subtitle / Tagline -->
+    <text x="0" y="195" font-family="'Lora', Georgia, serif" font-style="italic" font-size="24" fill="#7C796F">Reconstruyendo y preservando nuestra memoria e historia</text>
+
+    <!-- Divider Line -->
+    <line x1="0" y1="235" x2="480" y2="235" stroke="#D1CEC7" stroke-width="2"/>
+
+    <!-- Feature highlights badges -->
+    <g transform="translate(0, 270)">
+      <rect x="0" y="0" width="145" height="38" rx="19" fill="#FFFFFF" stroke="#D1CEC7" stroke-width="1.5"/>
+      <text x="72" y="24" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="600" fill="#434331" text-anchor="middle">🌳 Árbol Interactivo</text>
+
+      <rect x="160" y="0" width="145" height="38" rx="19" fill="#FFFFFF" stroke="#D1CEC7" stroke-width="1.5"/>
+      <text x="232" y="24" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="600" fill="#434331" text-anchor="middle">🔒 Guardado Local</text>
+
+      <rect x="320" y="0" width="150" height="38" rx="19" fill="#FFFFFF" stroke="#D1CEC7" stroke-width="1.5"/>
+      <text x="395" y="24" font-family="'Plus Jakarta Sans', sans-serif" font-size="13" font-weight="600" fill="#434331" text-anchor="middle">📖 Libro & Fichas</text>
+    </g>
+  </g>
+</svg>

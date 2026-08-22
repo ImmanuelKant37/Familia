@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TreeProvider, useTree } from './context/TreeContext';
 import { Header } from './components/common/Header';
+import { AuthScreen } from './components/auth/AuthScreen';
 import { InteractiveTreeView } from './components/tree/InteractiveTreeView';
 import { TimelineView } from './components/timeline/TimelineView';
 import { MigrationMapView } from './components/map/MigrationMapView';
@@ -23,15 +24,17 @@ import { TreeSettingsModal } from './components/tree/TreeSettingsModal';
 import { SearchModal } from './components/search/SearchModal';
 import { GenealogyBookModal } from './components/export/GenealogyBookModal';
 import { SurnameStylerModal } from './components/tree/SurnameStylerModal';
+import { GitVersionModal } from './components/git/GitVersionModal';
 import { Person } from './types';
-import { Shield, Sparkles, UserPlus, Info, Lock } from 'lucide-react';
+import { TreePine, RefreshCw } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
   const { 
     people, selectedPersonId, setSelectedPersonId, 
-    addPerson, updatePerson, deletePerson, canEdit 
+    addPerson, updatePerson, deletePerson, canEdit,
+    undo, redo
   } = useTree();
-  const { currentUser, isPublicMode, signInWithGoogle } = useAuth();
+  const { currentUser, loading } = useAuth();
 
   // Navigation View State
   const [activeTab, setActiveTab] = useState<'tree' | 'timeline' | 'map' | 'media' | 'sources' | 'audit'>('tree');
@@ -48,15 +51,30 @@ const MainAppContent: React.FC = () => {
   const [showGedcomModal, setShowGedcomModal] = useState(false);
   const [showBookModal, setShowBookModal] = useState(false);
   const [showSurnameModal, setShowSurnameModal] = useState(false);
+  const [gitModalState, setGitModalState] = useState<{ open: boolean; tab?: 'history' | 'branches' | 'merge' | 'abandoned' }>({
+    open: false,
+    tab: 'history'
+  });
   const [settingsModalState, setSettingsModalState] = useState<{ open: boolean; tab?: 'settings' | 'create' | 'list' }>({
     open: false,
     tab: 'settings'
   });
   const [showSearchModal, setShowSearchModal] = useState(false);
 
-  // Global Keyboard Shortcuts (⌘K for Search, Suprimir / Delete for removing selected person)
+  // Global Keyboard Shortcuts (⌘K Search, Delete, ⌘Z Undo, ⌘⇧Z / ⌘Y Redo)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable ||
+        target.closest('input') ||
+        target.closest('textarea') ||
+        target.closest('select')
+      );
+
       // ⌘K / Ctrl+K for search
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -64,27 +82,30 @@ const MainAppContent: React.FC = () => {
         return;
       }
 
+      // ⌘Z / Ctrl+Z for Git Undo (when not inside typing input)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && !isInput && canEdit) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      // ⌘⇧Z / Ctrl+Shift+Z or ⌘Y / Ctrl+Y for Git Redo
+      if (
+        ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'z' && !isInput && canEdit) ||
+        ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y' && !isInput && canEdit)
+      ) {
+        e.preventDefault();
+        redo();
+        return;
+      }
+
       // Suprimir / Delete / Backspace to delete selected person
       if (
         (e.key === 'Delete' || e.key === 'Backspace' || e.key === 'Del') && 
         selectedPersonId && 
-        canEdit
+        canEdit &&
+        !isInput
       ) {
-        // Prevent deleting if user is typing in an input, textarea or contenteditable element
-        const target = e.target as HTMLElement | null;
-        if (
-          target &&
-          (target.tagName === 'INPUT' ||
-           target.tagName === 'TEXTAREA' ||
-           target.tagName === 'SELECT' ||
-           target.isContentEditable ||
-           target.closest('input') ||
-           target.closest('textarea') ||
-           target.closest('select'))
-        ) {
-          return;
-        }
-
         // Prevent if any modal is currently visible
         if (
           detailModalPerson ||
@@ -95,6 +116,7 @@ const MainAppContent: React.FC = () => {
           showGedcomModal ||
           showBookModal ||
           showSurnameModal ||
+          gitModalState.open ||
           settingsModalState.open ||
           showSearchModal
         ) {
@@ -105,7 +127,7 @@ const MainAppContent: React.FC = () => {
         if (personToDelete) {
           e.preventDefault();
           const confirmed = window.confirm(
-            `¿Deseas eliminar a "${personToDelete.firstName} ${personToDelete.lastName}" del árbol familiar (Tecla Suprimir)?`
+            `¿Deseas eliminar a "${personToDelete.firstName} ${personToDelete.lastName}" del árbol familiar?`
           );
           if (confirmed) {
             deletePerson(personToDelete.id);
@@ -123,6 +145,8 @@ const MainAppContent: React.FC = () => {
     people, 
     deletePerson, 
     setSelectedPersonId,
+    undo,
+    redo,
     detailModalPerson,
     personFormModal.open,
     relativeModalPerson,
@@ -131,9 +155,29 @@ const MainAppContent: React.FC = () => {
     showGedcomModal,
     showBookModal,
     showSurnameModal,
+    gitModalState.open,
     settingsModalState.open,
     showSearchModal
   ]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F2ED] flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-[#5A5A40] text-white flex items-center justify-center shadow-md animate-pulse">
+          <TreePine className="w-7 h-7" />
+        </div>
+        <div className="flex items-center space-x-2 text-sm text-[#5A5A40] font-medium font-sans">
+          <RefreshCw className="w-4 h-4 animate-spin" />
+          <span>Cargando árbol familiar en Firebase...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Pure Firebase Authentication Gate
+  if (!currentUser) {
+    return <AuthScreen />;
+  }
 
   const handleSelectPersonCard = (person: Person) => {
     setSelectedPersonId(person.id);
@@ -175,33 +219,8 @@ const MainAppContent: React.FC = () => {
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenBookModal={() => setShowBookModal(true)}
         onOpenSurnameStyles={() => setShowSurnameModal(true)}
+        onOpenGitModal={(tab) => setGitModalState({ open: true, tab: tab || 'history' })}
       />
-
-      {/* Public Visitor Banner (if unauthenticated or in public mode) */}
-      {(isPublicMode || !currentUser) && (
-        <div className="bg-[#5A5A40] text-[#F5F2ED] px-4 py-2.5 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-[#434331]">
-          <div className="flex items-center space-x-2">
-            <Shield className="w-4 h-4 text-[#E5E2D9] shrink-0" />
-            <span>
-              <strong className="font-semibold">Vista Pública Protegida:</strong> Los datos privados de personas vivas se encuentran protegidos y anonimizados.
-            </span>
-          </div>
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowCollabModal(true)}
-              className="text-[#E5E2D9] underline hover:text-white font-medium cursor-pointer"
-            >
-              Solicitar Acceso como Familiar
-            </button>
-            <button
-              onClick={signInWithGoogle}
-              className="bg-white/15 hover:bg-white/25 text-white px-3 py-1 rounded-full text-xs font-sans font-semibold transition-colors cursor-pointer"
-            >
-              Iniciar Sesión
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Main Viewport */}
       <main className="flex-1 flex flex-col overflow-x-hidden">
@@ -215,6 +234,7 @@ const MainAppContent: React.FC = () => {
             onOpenFullHistory={() => setActiveTab('audit')}
             onOpenBookModal={() => setShowBookModal(true)}
             onOpenSurnameStyles={() => setShowSurnameModal(true)}
+            onOpenGitModal={(tab) => setGitModalState({ open: true, tab: tab || 'history' })}
           />
         )}
 
@@ -347,6 +367,14 @@ const MainAppContent: React.FC = () => {
       {showSurnameModal && (
         <SurnameStylerModal
           onClose={() => setShowSurnameModal(false)}
+        />
+      )}
+
+      {/* 11. Git Version Control & Branches Modal */}
+      {gitModalState.open && (
+        <GitVersionModal
+          initialTab={gitModalState.tab}
+          onClose={() => setGitModalState({ open: false, tab: 'history' })}
         />
       )}
     </div>

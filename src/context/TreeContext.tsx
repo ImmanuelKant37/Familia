@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   Tree, Person, Relationship, FamilyEvent, MediaItem, 
-  HistoricalSource, AccessRequest, Proposal, ChangeLog, Comment, SurnameStyle 
+  HistoricalSource, AccessRequest, Proposal, ChangeLog, Comment, SurnameStyle,
+  TreeCommit, TreeBranch, CommitAuthor, CommitDelta, BranchDiffSummary, TreeSnapshot
 } from '../types';
 import { TreeService } from '../services/treeService';
+import { GitVersionService } from '../services/gitVersionService';
 import { useAuth } from './AuthContext';
 import { SEED_TREE } from '../data/seedData';
 import { exportToGedcom, parseGedcom } from '../services/gedcomService';
@@ -22,6 +24,23 @@ interface TreeContextType {
   comments: Comment[];
   loading: boolean;
   selectedPersonId: string | null;
+  // Git Versioning & Branching
+  branches: TreeBranch[];
+  activeBranchId: string;
+  commits: TreeCommit[];
+  currentCommitId: string | null;
+  canUndo: boolean;
+  canRedo: boolean;
+  abandonedBranches: TreeBranch[];
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
+  createBranch: (name: string, description?: string, fromCommitId?: string) => Promise<TreeBranch>;
+  switchBranch: (branchId: string) => Promise<void>;
+  deleteBranch: (branchId: string) => Promise<void>;
+  checkoutCommit: (commitId: string) => Promise<void>;
+  restoreCommit: (commitId: string, customMessage?: string) => Promise<void>;
+  getBranchDiff: (sourceBranchId: string, targetBranchId?: string) => BranchDiffSummary | null;
+  mergeBranch: (sourceBranchId: string, targetBranchId?: string, strategy?: 'combine' | 'theirs' | 'ours') => Promise<{ mergedCount: number; message: string }>;
   // Actions
   selectTree: (treeId: string) => Promise<void>;
   createTree: (treeData: Partial<Tree>, options?: { startWithRootPerson?: boolean; rootPersonName?: string; rootPersonLastName?: string }) => Promise<Tree>;
@@ -98,8 +117,141 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Git Versioning & Branching State
+  const [branches, setBranches] = useState<TreeBranch[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState<string>('main');
+  const [commits, setCommits] = useState<TreeCommit[]>([]);
+  const [currentCommitId, setCurrentCommitId] = useState<string | null>(null);
+
   const canEdit = !isPublicMode && (activeRole === 'owner' || activeRole === 'editor' || activeRole === 'collaborator');
   const canManage = !isPublicMode && activeRole === 'owner';
+
+  // Helper to build a current snapshot
+  const getSnapshot = useCallback((
+    customPeople?: Person[],
+    customRels?: Relationship[],
+    customEvents?: FamilyEvent[],
+    customMedia?: MediaItem[],
+    customSources?: HistoricalSource[]
+  ): TreeSnapshot => {
+    return {
+      people: customPeople ?? people,
+      relationships: customRels ?? relationships,
+      events: customEvents ?? events,
+      media: customMedia ?? media,
+      sources: customSources ?? sources,
+      surnameStyles: activeTree?.settings?.surnameStyles || {}
+    };
+  }, [people, relationships, events, media, sources, activeTree]);
+
+  // Load Git Data for the tree
+  const loadGitForTree = useCallback(async (
+    treeId: string, 
+    initialSnap: TreeSnapshot
+  ) => {
+    let loadedBranches: TreeBranch[] = [];
+    let loadedCommits: TreeCommit[] = [];
+    let activeBId = 'main';
+
+    // Fetch from Firestore
+    const remoteGit = await GitVersionService.fetchGitDataFromFirestore(treeId);
+    if (remoteGit.branches.length > 0 && remoteGit.commits.length > 0) {
+      loadedBranches = remoteGit.branches;
+      loadedCommits = remoteGit.commits;
+      activeBId = remoteGit.branches.find(b => b.isDefault)?.id || remoteGit.branches[0]?.id || 'main';
+    } else {
+      const author: CommitAuthor = {
+        userId: currentUser?.userId || 'investigador',
+        userName: currentUser?.displayName || 'Usuario',
+        userEmail: currentUser?.email || undefined,
+        userPhoto: currentUser?.photoURL || undefined,
+        isAnonymous: false,
+        role: activeRole
+      };
+      const { commit, branch } = GitVersionService.createInitialCommit(treeId, initialSnap, author);
+      loadedBranches = [branch];
+      loadedCommits = [commit];
+      activeBId = 'main';
+      await GitVersionService.persistCommitToFirestore(commit);
+      await GitVersionService.persistBranchToFirestore(branch);
+    }
+
+    setBranches(loadedBranches);
+    setCommits(loadedCommits);
+    setActiveBranchId(activeBId);
+
+    const curBranch = loadedBranches.find(b => b.id === activeBId) || loadedBranches[0];
+    const headId = curBranch?.headCommitId || loadedCommits[loadedCommits.length - 1]?.id || null;
+    setCurrentCommitId(headId);
+  }, [currentUser, activeRole]);
+
+  // Record a new Git Commit on the active branch
+  const recordActionCommit = useCallback(async (
+    action: CommitDelta['action'],
+    message: string,
+    newSnapshot: TreeSnapshot,
+    deltaDetails?: Partial<CommitDelta>
+  ): Promise<TreeCommit | null> => {
+    if (!activeTree) return null;
+
+    const author: CommitAuthor = {
+      userId: currentUser?.userId || 'investigador',
+      userName: currentUser?.displayName || 'Usuario',
+      userEmail: currentUser?.email || undefined,
+      userPhoto: currentUser?.photoURL || undefined,
+      isAnonymous: false,
+      role: activeRole
+    };
+
+    const currentBranch = branches.find(b => b.id === activeBranchId) || {
+      id: activeBranchId,
+      treeId: activeTree.id,
+      name: activeBranchId === 'main' ? 'Principal (Main)' : 'Rama de Trabajo',
+      createdBy: author,
+      createdAt: new Date().toISOString(),
+      baseCommitId: currentCommitId || '',
+      headCommitId: currentCommitId || '',
+      isDefault: activeBranchId === 'main',
+      status: 'active' as const,
+      lastActivityAt: new Date().toISOString(),
+      color: activeBranchId === 'main' ? '#5A5A40' : '#A65D47'
+    };
+
+    const newCommit = GitVersionService.createCommit({
+      treeId: activeTree.id,
+      branchId: activeBranchId,
+      branchName: currentBranch.name,
+      parentCommitId: currentCommitId,
+      message,
+      author,
+      snapshot: newSnapshot,
+      delta: {
+        action,
+        ...deltaDetails
+      }
+    });
+
+    const updatedBranch: TreeBranch = {
+      ...currentBranch,
+      headCommitId: newCommit.id,
+      lastActivityAt: new Date().toISOString()
+    };
+
+    const newCommits = [...commits, newCommit];
+    const newBranches = branches.map(b => b.id === updatedBranch.id ? updatedBranch : b);
+    if (!newBranches.some(b => b.id === updatedBranch.id)) {
+      newBranches.push(updatedBranch);
+    }
+
+    setCommits(newCommits);
+    setCurrentCommitId(newCommit.id);
+    setBranches(newBranches);
+
+    await GitVersionService.persistCommitToFirestore(newCommit);
+    await GitVersionService.persistBranchToFirestore(updatedBranch);
+
+    return newCommit;
+  }, [activeTree, activeBranchId, branches, commits, currentCommitId, currentUser, activeRole]);
 
   // Load all tree data
   const loadTreeData = useCallback(async (treeId: string) => {
@@ -136,12 +288,23 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProposals(treeProps);
       setChanges(treeChanges);
       setComments(treeComments);
+
+      // Initialize or load Git branches & commits
+      const currentSnap: TreeSnapshot = {
+        people: treePeople,
+        relationships: treeRels,
+        events: treeEvents,
+        media: treeMedia,
+        sources: treeSources,
+        surnameStyles: {}
+      };
+      await loadGitForTree(treeId, currentSnap);
     } catch (err) {
       console.error('Error loading tree data:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadGitForTree]);
 
   // Initial load
   useEffect(() => {
@@ -175,14 +338,14 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newTreeId = `tree-${Date.now()}`;
     const newTree: Tree = {
       id: newTreeId,
-      name: treeData.name || 'Nuevo Árbol Familiar',
+      name: treeData.name || 'Familia',
       description: treeData.description || '',
       ownerId: currentUser?.userId || 'owner-guest',
       ownerName: currentUser?.displayName || 'Propietario',
       ownerEmail: currentUser?.email || '',
       coverImage: treeData.coverImage || 'https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=1200&q=80',
       visibility: treeData.visibility || 'public',
-      slug: (treeData.name || 'arbol').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+      slug: (treeData.name || 'familia').toLowerCase().replace(/[^a-z0-9]/g, '-'),
       settings: {
         hideLivingDetails: true,
         livingAgeThreshold: 100,
@@ -196,8 +359,7 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString()
     };
 
-    // Ensure completely clear cache for new tree
-    TreeService.clearTreeCache(newTree.id);
+    // Save new tree in Firestore
     await TreeService.saveTree(newTree);
 
     let initialPeople: Person[] = [];
@@ -280,7 +442,7 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadTreeData(nextTree.id);
       } else {
         // If all trees were deleted, create a fresh clean tree
-        await createTree({ name: 'Mi Familia' });
+        await createTree({ name: 'Familia' });
       }
     }
   };
@@ -343,7 +505,16 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     await TreeService.savePerson(newPerson);
-    setPeople(prev => [...prev, newPerson]);
+    const updatedPeople = [...people, newPerson];
+    setPeople(updatedPeople);
+
+    // Git commit
+    const commitMsg = `Agregó a ${newPerson.firstName} ${newPerson.lastName} al árbol`;
+    await recordActionCommit('add_person', commitMsg, getSnapshot(updatedPeople), {
+      entityType: 'person',
+      entityId: newPerson.id,
+      entityName: `${newPerson.firstName} ${newPerson.lastName}`
+    });
 
     // Log change
     const change: ChangeLog = {
@@ -353,9 +524,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: newPerson.id,
       entityName: `${newPerson.firstName} ${newPerson.lastName}`,
       action: 'create',
-      summary: `Agregó a ${newPerson.firstName} ${newPerson.lastName} al árbol`,
+      summary: commitMsg,
       userId: currentUser?.userId || 'system',
-      userName: currentUser?.displayName || 'Usuario',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
       timestamp: new Date().toISOString()
     };
     await TreeService.logChange(change);
@@ -366,9 +537,20 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updatePerson = async (person: Person): Promise<void> => {
     if (!activeTree) return;
+    const oldPerson = people.find(p => p.id === person.id);
     const updated = { ...person, updatedAt: new Date().toISOString() };
     await TreeService.savePerson(updated);
-    setPeople(prev => prev.map(p => p.id === updated.id ? updated : p));
+    const updatedPeople = people.map(p => p.id === updated.id ? updated : p);
+    setPeople(updatedPeople);
+
+    const diffs = oldPerson ? GitVersionService.computePersonDiff(oldPerson, updated) : [];
+    const commitMsg = `Actualizó datos de ${updated.firstName} ${updated.lastName}`;
+    await recordActionCommit('update_person', commitMsg, getSnapshot(updatedPeople), {
+      entityType: 'person',
+      entityId: updated.id,
+      entityName: `${updated.firstName} ${updated.lastName}`,
+      diffs
+    });
 
     const change: ChangeLog = {
       id: `chg-${Date.now()}`,
@@ -377,9 +559,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: updated.id,
       entityName: `${updated.firstName} ${updated.lastName}`,
       action: 'update',
-      summary: `Actualizó datos de ${updated.firstName} ${updated.lastName}`,
+      summary: commitMsg,
       userId: currentUser?.userId || 'system',
-      userName: currentUser?.displayName || 'Usuario',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
       timestamp: new Date().toISOString()
     };
     await TreeService.logChange(change);
@@ -390,11 +572,20 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!activeTree) return;
     const target = people.find(p => p.id === personId);
     await TreeService.deletePerson(activeTree.id, personId);
-    setPeople(prev => prev.filter(p => p.id !== personId));
-    setRelationships(prev => prev.filter(r => r.person1Id !== personId && r.person2Id !== personId));
+    const updatedPeople = people.filter(p => p.id !== personId);
+    const updatedRels = relationships.filter(r => r.person1Id !== personId && r.person2Id !== personId);
+    setPeople(updatedPeople);
+    setRelationships(updatedRels);
     setSelectedPersonId(prev => (prev === personId ? null : prev));
 
     if (target) {
+      const commitMsg = `Eliminó a ${target.firstName} ${target.lastName} del árbol`;
+      await recordActionCommit('delete_person', commitMsg, getSnapshot(updatedPeople, updatedRels), {
+        entityType: 'person',
+        entityId: personId,
+        entityName: `${target.firstName} ${target.lastName}`
+      });
+
       const change: ChangeLog = {
         id: `chg-${Date.now()}`,
         treeId: activeTree.id,
@@ -402,9 +593,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         entityId: personId,
         entityName: `${target.firstName} ${target.lastName}`,
         action: 'delete',
-        summary: `Eliminó a ${target.firstName} ${target.lastName} del árbol`,
+        summary: commitMsg,
         userId: currentUser?.userId || 'system',
-        userName: currentUser?.displayName || 'Usuario',
+        userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
         timestamp: new Date().toISOString()
       };
       await TreeService.logChange(change);
@@ -432,10 +623,19 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     await TreeService.saveRelationship(newRel);
-    setRelationships(prev => [...prev, newRel]);
+    const updatedRels = [...relationships, newRel];
+    setRelationships(updatedRels);
 
     const p1 = people.find(p => p.id === newRel.person1Id);
     const p2 = people.find(p => p.id === newRel.person2Id);
+    const commitMsg = `Conectó a ${p1?.firstName || 'Persona'} con ${p2?.firstName || 'Persona'} (${newRel.type})`;
+    
+    await recordActionCommit('add_relationship', commitMsg, getSnapshot(people, updatedRels), {
+      entityType: 'relationship',
+      entityId: newRel.id,
+      entityName: `Relación ${newRel.type}`
+    });
+
     const change: ChangeLog = {
       id: `chg-${Date.now()}`,
       treeId: activeTree.id,
@@ -443,9 +643,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: newRel.id,
       entityName: `Relación ${newRel.type}`,
       action: 'create',
-      summary: `Conectó a ${p1?.firstName || 'Persona'} con ${p2?.firstName || 'Persona'} (${newRel.type})`,
+      summary: commitMsg,
       userId: currentUser?.userId || 'system',
-      userName: currentUser?.displayName || 'Usuario',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
       timestamp: new Date().toISOString()
     };
     await TreeService.logChange(change);
@@ -457,7 +657,13 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteRelationship = async (relId: string): Promise<void> => {
     if (!activeTree) return;
     await TreeService.deleteRelationship(activeTree.id, relId);
-    setRelationships(prev => prev.filter(r => r.id !== relId));
+    const updatedRels = relationships.filter(r => r.id !== relId);
+    setRelationships(updatedRels);
+
+    await recordActionCommit('delete_relationship', `Eliminó relación del árbol`, getSnapshot(people, updatedRels), {
+      entityType: 'relationship',
+      entityId: relId
+    });
   };
 
   // Events operations
@@ -482,7 +688,15 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     await TreeService.saveEvent(newEv);
-    setEvents(prev => [...prev, newEv]);
+    const updatedEvents = [...events, newEv];
+    setEvents(updatedEvents);
+
+    const commitMsg = `Registró acontecimiento: ${newEv.title}`;
+    await recordActionCommit('add_event', commitMsg, getSnapshot(people, relationships, updatedEvents), {
+      entityType: 'event',
+      entityId: newEv.id,
+      entityName: newEv.title
+    });
 
     const change: ChangeLog = {
       id: `chg-${Date.now()}`,
@@ -491,9 +705,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: newEv.id,
       entityName: newEv.title,
       action: 'create',
-      summary: `Registró evento histórico: ${newEv.title}`,
+      summary: commitMsg,
       userId: currentUser?.userId || 'system',
-      userName: currentUser?.displayName || 'Usuario',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
       timestamp: new Date().toISOString()
     };
     await TreeService.logChange(change);
@@ -505,13 +719,24 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateEvent = async (event: FamilyEvent): Promise<void> => {
     if (!activeTree) return;
     await TreeService.saveEvent(event);
-    setEvents(prev => prev.map(e => e.id === event.id ? event : e));
+    const updatedEvents = events.map(e => e.id === event.id ? event : e);
+    setEvents(updatedEvents);
+    await recordActionCommit('add_event', `Actualizó acontecimiento: ${event.title}`, getSnapshot(people, relationships, updatedEvents), {
+      entityType: 'event',
+      entityId: event.id,
+      entityName: event.title
+    });
   };
 
   const deleteEvent = async (eventId: string): Promise<void> => {
     if (!activeTree) return;
     await TreeService.deleteEvent(activeTree.id, eventId);
-    setEvents(prev => prev.filter(e => e.id !== eventId));
+    const updatedEvents = events.filter(e => e.id !== eventId);
+    setEvents(updatedEvents);
+    await recordActionCommit('add_event', `Eliminó un acontecimiento`, getSnapshot(people, relationships, updatedEvents), {
+      entityType: 'event',
+      entityId: eventId
+    });
   };
 
   // Media operations
@@ -539,7 +764,15 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     await TreeService.saveMedia(newMedia);
-    setMedia(prev => [...prev, newMedia]);
+    const updatedMedia = [...media, newMedia];
+    setMedia(updatedMedia);
+
+    const commitMsg = `Subió archivo multimedia: ${newMedia.title}`;
+    await recordActionCommit('add_media', commitMsg, getSnapshot(people, relationships, events, updatedMedia), {
+      entityType: 'media',
+      entityId: newMedia.id,
+      entityName: newMedia.title
+    });
 
     const change: ChangeLog = {
       id: `chg-${Date.now()}`,
@@ -548,9 +781,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: newMedia.id,
       entityName: newMedia.title,
       action: 'create',
-      summary: `Subió archivo multimedia: ${newMedia.title}`,
+      summary: commitMsg,
       userId: currentUser?.userId || 'system',
-      userName: currentUser?.displayName || 'Usuario',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
       timestamp: new Date().toISOString()
     };
     await TreeService.logChange(change);
@@ -562,7 +795,12 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteMedia = async (mediaId: string): Promise<void> => {
     if (!activeTree) return;
     await TreeService.deleteMedia(activeTree.id, mediaId);
-    setMedia(prev => prev.filter(m => m.id !== mediaId));
+    const updatedMedia = media.filter(m => m.id !== mediaId);
+    setMedia(updatedMedia);
+    await recordActionCommit('add_media', `Eliminó archivo multimedia`, getSnapshot(people, relationships, events, updatedMedia), {
+      entityType: 'media',
+      entityId: mediaId
+    });
   };
 
   // Sources operations
@@ -583,7 +821,15 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     await TreeService.saveSource(newSource);
-    setSources(prev => [...prev, newSource]);
+    const updatedSources = [...sources, newSource];
+    setSources(updatedSources);
+
+    const commitMsg = `Añadió fuente documental: ${newSource.title}`;
+    await recordActionCommit('add_source', commitMsg, getSnapshot(people, relationships, events, media, updatedSources), {
+      entityType: 'source',
+      entityId: newSource.id,
+      entityName: newSource.title
+    });
 
     const change: ChangeLog = {
       id: `chg-${Date.now()}`,
@@ -592,9 +838,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
       entityId: newSource.id,
       entityName: newSource.title,
       action: 'create',
-      summary: `Añadió fuente documental: ${newSource.title}`,
+      summary: commitMsg,
       userId: currentUser?.userId || 'system',
-      userName: currentUser?.displayName || 'Usuario',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
       timestamp: new Date().toISOString()
     };
     await TreeService.logChange(change);
@@ -606,7 +852,12 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteSource = async (sourceId: string): Promise<void> => {
     if (!activeTree) return;
     await TreeService.deleteSource(activeTree.id, sourceId);
-    setSources(prev => prev.filter(s => s.id !== sourceId));
+    const updatedSources = sources.filter(s => s.id !== sourceId);
+    setSources(updatedSources);
+    await recordActionCommit('add_source', `Eliminó fuente documental`, getSnapshot(people, relationships, events, media, updatedSources), {
+      entityType: 'source',
+      entityId: sourceId
+    });
   };
 
   // Requests
@@ -837,13 +1088,13 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newTreeId = `tree-${Date.now()}`;
     const newTree: Tree = {
       id: newTreeId,
-      name: 'Mi Árbol Genealógico',
+      name: 'Familia',
       description: 'Árbol familiar inicial colaborativo',
       ownerId: currentUser?.userId || 'user-default-owner',
       ownerName: currentUser?.displayName || 'Propietario',
       ownerEmail: currentUser?.email || '',
       visibility: 'public',
-      slug: 'mi-arbol-familiar',
+      slug: 'familia',
       settings: {
         hideLivingDetails: true,
         livingAgeThreshold: 100,
@@ -1298,10 +1549,272 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { createdRelative, bridgePlaceholders };
   };
 
+  // Undo & Redo calculations
+  const canUndo = Boolean(
+    currentCommitId && 
+    commits.find(c => c.id === currentCommitId)?.parentCommitId
+  );
+
+  const canRedo = Boolean(
+    currentCommitId && 
+    commits.some(c => c.parentCommitId === currentCommitId && c.branchId === activeBranchId)
+  );
+
+  const abandonedBranches = GitVersionService.detectAbandonedBranches(branches, commits);
+
+  const undo = async () => {
+    if (!canUndo || !currentCommitId || !activeTree) return;
+    const current = commits.find(c => c.id === currentCommitId);
+    if (!current || !current.parentCommitId) return;
+
+    const parent = commits.find(c => c.id === current.parentCommitId);
+    if (!parent) return;
+
+    setPeople(parent.snapshot.people || []);
+    setRelationships(parent.snapshot.relationships || []);
+    setEvents(parent.snapshot.events || []);
+    setSources(parent.snapshot.sources || []);
+    setMedia(parent.snapshot.media || []);
+    setCurrentCommitId(parent.id);
+
+    await TreeService.bulkSavePeople(activeTree.id, parent.snapshot.people || []);
+    await TreeService.bulkSaveRelationships(activeTree.id, parent.snapshot.relationships || []);
+    await logUserMovement(`↩️ Deshizo movimiento (Volvió a: ${parent.shortHash} - ${parent.message})`);
+  };
+
+  const redo = async () => {
+    if (!canRedo || !currentCommitId || !activeTree) return;
+    const nextCommit = commits.find(c => c.parentCommitId === currentCommitId && c.branchId === activeBranchId);
+    if (!nextCommit) return;
+
+    setPeople(nextCommit.snapshot.people || []);
+    setRelationships(nextCommit.snapshot.relationships || []);
+    setEvents(nextCommit.snapshot.events || []);
+    setSources(nextCommit.snapshot.sources || []);
+    setMedia(nextCommit.snapshot.media || []);
+    setCurrentCommitId(nextCommit.id);
+
+    await TreeService.bulkSavePeople(activeTree.id, nextCommit.snapshot.people || []);
+    await TreeService.bulkSaveRelationships(activeTree.id, nextCommit.snapshot.relationships || []);
+    await logUserMovement(`↪️ Rehizo movimiento (Avanzó a: ${nextCommit.shortHash} - ${nextCommit.message})`);
+  };
+
+  const createBranch = async (name: string, description?: string, fromCommitId?: string): Promise<TreeBranch> => {
+    if (!activeTree) throw new Error('No active tree');
+    const baseId = fromCommitId || currentCommitId || (commits.length > 0 ? commits[commits.length - 1].id : '');
+    const branchId = GitVersionService.generateBranchId(name);
+    const author: CommitAuthor = {
+      userId: currentUser?.userId || 'investigador',
+      userName: currentUser?.displayName || 'Usuario',
+      userEmail: currentUser?.email || undefined,
+      userPhoto: currentUser?.photoURL || undefined,
+      isAnonymous: false,
+      role: activeRole
+    };
+
+    const newBranch: TreeBranch = {
+      id: branchId,
+      treeId: activeTree.id,
+      name: name.trim(),
+      description: description?.trim() || '',
+      createdBy: author,
+      createdAt: new Date().toISOString(),
+      baseCommitId: baseId,
+      headCommitId: baseId,
+      isDefault: false,
+      status: 'active',
+      lastActivityAt: new Date().toISOString(),
+      color: '#A65D47'
+    };
+
+    const newBranches = [...branches, newBranch];
+    setBranches(newBranches);
+    setActiveBranchId(newBranch.id);
+
+    await GitVersionService.persistBranchToFirestore(newBranch);
+
+    await logUserMovement(`🌿 Creó la nueva rama de investigación "${newBranch.name}"`);
+    return newBranch;
+  };
+
+  const switchBranch = async (branchId: string) => {
+    if (!activeTree) return;
+    const targetBranch = branches.find(b => b.id === branchId);
+    if (!targetBranch) return;
+
+    setActiveBranchId(branchId);
+
+    const headCommit = commits.find(c => c.id === targetBranch.headCommitId);
+    if (headCommit && headCommit.snapshot) {
+      setPeople(headCommit.snapshot.people || []);
+      setRelationships(headCommit.snapshot.relationships || []);
+      setEvents(headCommit.snapshot.events || []);
+      setSources(headCommit.snapshot.sources || []);
+      setMedia(headCommit.snapshot.media || []);
+      setCurrentCommitId(headCommit.id);
+    }
+
+    await logUserMovement(`🌿 Cambió a la rama "${targetBranch.name}"`);
+  };
+
+  const deleteBranch = async (branchId: string) => {
+    if (!activeTree || branchId === 'main') return;
+    const remaining = branches.filter(b => b.id !== branchId);
+    setBranches(remaining);
+    if (activeBranchId === branchId) {
+      const defaultB = remaining.find(b => b.isDefault) || remaining[0];
+      if (defaultB) {
+        await switchBranch(defaultB.id);
+      }
+    }
+  };
+
+  const checkoutCommit = async (commitId: string) => {
+    if (!activeTree) return;
+    const commit = commits.find(c => c.id === commitId);
+    if (!commit || !commit.snapshot) return;
+
+    setPeople(commit.snapshot.people || []);
+    setRelationships(commit.snapshot.relationships || []);
+    setEvents(commit.snapshot.events || []);
+    setSources(commit.snapshot.sources || []);
+    setMedia(commit.snapshot.media || []);
+    setCurrentCommitId(commit.id);
+
+    await logUserMovement(`🔍 Inspeccionando punto histórico (${commit.shortHash}: ${commit.message})`);
+  };
+
+  const restoreCommit = async (commitId: string, customMessage?: string) => {
+    if (!activeTree) return;
+    const targetCommit = commits.find(c => c.id === commitId);
+    if (!targetCommit || !targetCommit.snapshot) return;
+
+    const snap = targetCommit.snapshot;
+    setPeople(snap.people || []);
+    setRelationships(snap.relationships || []);
+    setEvents(snap.events || []);
+    setSources(snap.sources || []);
+    setMedia(snap.media || []);
+
+    const msg = customMessage || `⏪ Restaurado al estado del commit ${targetCommit.shortHash} ("${targetCommit.message}")`;
+    await recordActionCommit('rollback', msg, snap, {
+      details: `Revertido histórico a ${targetCommit.shortHash}`
+    });
+
+    await TreeService.bulkSavePeople(activeTree.id, snap.people || []);
+    await TreeService.bulkSaveRelationships(activeTree.id, snap.relationships || []);
+    await logUserMovement(msg);
+  };
+
+  const getBranchDiff = (sourceBranchId: string, targetBranchId: string = 'main'): BranchDiffSummary | null => {
+    const sourceB = branches.find(b => b.id === sourceBranchId);
+    const targetB = branches.find(b => b.id === targetBranchId) || branches.find(b => b.isDefault) || branches[0];
+    if (!sourceB || !targetB) return null;
+
+    return GitVersionService.calculateBranchDiff(sourceB, targetB, commits);
+  };
+
+  const mergeBranch = async (
+    sourceBranchId: string, 
+    targetBranchId: string = 'main',
+    strategy: 'combine' | 'theirs' | 'ours' = 'combine'
+  ): Promise<{ mergedCount: number; message: string }> => {
+    if (!activeTree) throw new Error('No active tree');
+    const sourceBranch = branches.find(b => b.id === sourceBranchId);
+    const targetBranch = branches.find(b => b.id === targetBranchId) || branches.find(b => b.isDefault) || branches[0];
+
+    if (!sourceBranch || !targetBranch) throw new Error('Branches not found');
+
+    const sourceHead = commits.find(c => c.id === sourceBranch.headCommitId);
+    const targetHead = commits.find(c => c.id === targetBranch.headCommitId);
+
+    if (!sourceHead?.snapshot || !targetHead?.snapshot) {
+      throw new Error('Snapshot data not available for merge');
+    }
+
+    const { mergedSnapshot, summary } = GitVersionService.mergeSnapshots(
+      sourceHead.snapshot,
+      targetHead.snapshot,
+      strategy
+    );
+
+    setPeople(mergedSnapshot.people);
+    setRelationships(mergedSnapshot.relationships);
+    setEvents(mergedSnapshot.events || []);
+    setSources(mergedSnapshot.sources || []);
+    setMedia(mergedSnapshot.media || []);
+
+    setActiveBranchId(targetBranch.id);
+
+    const updatedSourceBranch: TreeBranch = {
+      ...sourceBranch,
+      status: 'merged',
+      lastActivityAt: new Date().toISOString()
+    };
+
+    const author: CommitAuthor = {
+      userId: currentUser?.userId || 'user-local',
+      userName: currentUser?.displayName || (currentUser?.isAnonymous ? 'Investigador Anónimo' : 'Usuario'),
+      userEmail: currentUser?.email || undefined,
+      userPhoto: currentUser?.photoURL || undefined,
+      isAnonymous: currentUser?.isAnonymous ?? true,
+      role: activeRole
+    };
+
+    const mergeMsg = `🔀 Merge: Integró rama "${sourceBranch.name}" en "${targetBranch.name}" (+${summary.addedPeopleCount} personas, ~${summary.updatedPeopleCount} actualizadas, +${summary.addedRelationshipsCount} relaciones)`;
+    
+    const mergeCommit = GitVersionService.createCommit({
+      treeId: activeTree.id,
+      branchId: targetBranch.id,
+      branchName: targetBranch.name,
+      parentCommitId: targetHead.id,
+      message: mergeMsg,
+      author,
+      snapshot: mergedSnapshot,
+      delta: {
+        action: 'merge_branch',
+        details: `Integración completa de la rama secundaria ${sourceBranch.name}`
+      },
+      isMergeCommit: true,
+      mergedFromBranchId: sourceBranch.id,
+      mergedFromBranchName: sourceBranch.name
+    });
+
+    const updatedTargetBranch: TreeBranch = {
+      ...targetBranch,
+      headCommitId: mergeCommit.id,
+      lastActivityAt: new Date().toISOString()
+    };
+
+    const newCommits = [...commits, mergeCommit];
+    const newBranches = branches.map(b => {
+      if (b.id === updatedSourceBranch.id) return updatedSourceBranch;
+      if (b.id === updatedTargetBranch.id) return updatedTargetBranch;
+      return b;
+    });
+
+    setCommits(newCommits);
+    setCurrentCommitId(mergeCommit.id);
+    setBranches(newBranches);
+
+    await GitVersionService.persistCommitToFirestore(mergeCommit);
+    await GitVersionService.persistBranchToFirestore(updatedSourceBranch);
+    await GitVersionService.persistBranchToFirestore(updatedTargetBranch);
+
+    await TreeService.bulkSavePeople(activeTree.id, mergedSnapshot.people);
+    await TreeService.bulkSaveRelationships(activeTree.id, mergedSnapshot.relationships);
+
+    await logUserMovement(mergeMsg);
+
+    return {
+      mergedCount: summary.addedPeopleCount + summary.updatedPeopleCount + summary.addedRelationshipsCount,
+      message: mergeMsg
+    };
+  };
+
   // Reset to original demo tree
   const resetToDemoTree = async () => {
     if (currentUser) {
-      localStorage.clear();
       await TreeService.initializeDefaultData(currentUser.userId);
       setActiveTree(SEED_TREE);
       await loadTreeData(SEED_TREE.id);
@@ -1325,6 +1838,22 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
         comments,
         loading,
         selectedPersonId,
+        branches,
+        activeBranchId,
+        commits,
+        currentCommitId,
+        canUndo,
+        canRedo,
+        abandonedBranches,
+        undo,
+        redo,
+        createBranch,
+        switchBranch,
+        deleteBranch,
+        checkoutCommit,
+        restoreCommit,
+        getBranchDiff,
+        mergeBranch,
         selectTree,
         createTree,
         updateTree,

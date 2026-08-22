@@ -19,7 +19,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
     respondToRequest, respondToProposal,
     sendAccessRequest, canManage
   } = useTree();
-  const { activeRole, simulateRole, isPublicMode } = useAuth();
+  const { activeRole } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'members' | 'requests' | 'proposals' | 'share'>('members');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -156,35 +156,10 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
           {/* TAB 1: MEMBERS */}
           {activeTab === 'members' && (
             <div className="space-y-6">
-              {/* Role Simulation Sandbox Bar */}
+              {/* Active Role Status */}
               <div className="p-3.5 bg-[#E5E2D9]/70 rounded-2xl border border-[#D1CEC7] flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs text-[#434331]">
-                  <strong>Simulador de Rol:</strong> Prueba el árbol con diferentes niveles de privilegio:
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  {(['owner', 'editor', 'collaborator', 'viewer'] as MemberRole[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => simulateRole(r, false)}
-                      className={`text-[11px] px-2.5 py-1 rounded-full font-semibold transition-all capitalize uppercase tracking-wider ${
-                        activeRole === r && !isPublicMode
-                          ? 'bg-[#5A5A40] text-white shadow-2xs'
-                          : 'bg-white text-[#7C796F] hover:bg-[#F5F2ED] border border-[#D1CEC7]'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => simulateRole('viewer', true)}
-                    className={`text-[11px] px-2.5 py-1 rounded-full font-semibold transition-all uppercase tracking-wider ${
-                      isPublicMode
-                        ? 'bg-[#5A5A40] text-white shadow-2xs'
-                        : 'bg-white text-[#7C796F] hover:bg-[#F5F2ED] border border-[#D1CEC7]'
-                    }`}
-                  >
-                    Visitante Público
-                  </button>
+                  <strong>Tu rol actual en esta familia:</strong> <span className="capitalize font-semibold text-[#5A5A40]">{activeRole === 'owner' ? 'Propietario' : activeRole}</span>
                 </div>
               </div>
 

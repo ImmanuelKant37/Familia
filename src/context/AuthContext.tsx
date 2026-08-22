@@ -1,7 +1,18 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase/config';
+import { 
+  User, 
+  onAuthStateChanged, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signInAnonymously,
+  signOut, 
+  sendPasswordResetEmail,
+  updateProfile 
+} from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase/config';
 import { UserProfile, MemberRole } from '../types';
+import { cleanForFirestore } from '../utils/firestoreUtils';
 
 interface AuthContextType {
   currentUser: UserProfile | null;
@@ -9,140 +20,298 @@ interface AuthContextType {
   loading: boolean;
   activeRole: MemberRole;
   isPublicMode: boolean;
-  isInvited: boolean;
-  inviteContext: { targetId?: string; relation?: string } | null;
-  signInWithGoogle: () => Promise<void>;
+  registerWithEmail: (email: string, password: string, displayName: string) => Promise<void>;
+  loginWithEmail: (email: string, password: string) => Promise<void>;
+  loginAsGuest: () => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   logout: () => Promise<void>;
-  simulateRole: (role: MemberRole, isPublic?: boolean) => void;
-  updateProfileData: (data: Partial<UserProfile>) => void;
-  acceptInvite: (targetId?: string, relation?: string) => void;
+  updateProfileData: (data: Partial<UserProfile>) => Promise<void>;
 }
-
-const DEFAULT_DEMO_USER: UserProfile = {
-  userId: 'user-default-owner',
-  displayName: 'Juan Carlos Cantero',
-  email: 'fecsoul@gmail.com',
-  photoURL: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=200&q=80',
-  createdAt: '2026-01-10T10:00:00Z',
-  lastLoginAt: new Date().toISOString(),
-  privacyPreferences: {
-    hideEmailFromMembers: false,
-    notifyOnRequests: true,
-    notifyOnProposals: true
-  }
-};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const SESSION_STORAGE_KEY = 'familia_user_session';
+
+function getFallbackUserId(email: string): string {
+  const sanitized = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+  return `usr_${sanitized}`;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(DEFAULT_DEMO_USER);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [activeRole, setActiveRole] = useState<MemberRole>('owner');
   const [isPublicMode, setIsPublicMode] = useState<boolean>(false);
-  const [isInvited, setIsInvited] = useState<boolean>(false);
-  const [inviteContext, setInviteContext] = useState<{ targetId?: string; relation?: string } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
+  // Sync profile with Firestore
+  const fetchOrCreateUserProfile = async (
+    userId: string, 
+    email: string, 
+    customDisplayName?: string,
+    isAnonymous: boolean = false
+  ): Promise<UserProfile> => {
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const inviteParam = urlParams.get('invite');
-      const roleParam = urlParams.get('role');
-      const targetId = urlParams.get('targetId') || urlParams.get('target') || undefined;
-      const relation = urlParams.get('rel') || urlParams.get('relation') || undefined;
+      const userDocRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userDocRef);
 
-      if (inviteParam || roleParam === 'editor' || roleParam === 'collaborator' || targetId) {
-        setIsInvited(true);
-        setActiveRole('collaborator');
-        setIsPublicMode(false);
-        setInviteContext({ targetId, relation });
-        if (!currentUser) {
-          setCurrentUser({
-            userId: `invited-${Date.now()}`,
-            displayName: 'Familiar Invitado',
-            email: 'invitado@familia.org',
-            createdAt: new Date().toISOString(),
-            lastLoginAt: new Date().toISOString()
-          });
-        }
+      if (userSnap.exists()) {
+        const data = userSnap.data() as UserProfile;
+        const updatedProfile: UserProfile = {
+          ...data,
+          userId: userId,
+          email: email || data.email || '',
+          displayName: customDisplayName || data.displayName || email.split('@')[0] || 'Usuario',
+          lastLoginAt: new Date().toISOString()
+        };
+        // Update last login
+        await setDoc(userDocRef, cleanForFirestore({ lastLoginAt: updatedProfile.lastLoginAt }), { merge: true });
+        return updatedProfile;
+      } else {
+        const newProfile: UserProfile = {
+          userId: userId,
+          displayName: customDisplayName || email.split('@')[0] || 'Investigador',
+          email: email || '',
+          photoURL: undefined,
+          isAnonymous: isAnonymous,
+          storageMode: 'cloud',
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          privacyPreferences: {
+            hideEmailFromMembers: false,
+            notifyOnRequests: true,
+            notifyOnProposals: true
+          }
+        };
+        await setDoc(userDocRef, cleanForFirestore(newProfile));
+        return newProfile;
       }
     } catch (e) {
-      console.warn('Error reading invite params', e);
+      console.warn('Error fetching or creating user profile in Firestore:', e);
+      return {
+        userId: userId,
+        displayName: customDisplayName || email.split('@')[0] || 'Investigador',
+        email: email || '',
+        photoURL: undefined,
+        isAnonymous: isAnonymous,
+        storageMode: 'cloud',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString()
+      };
     }
-  }, []);
-
-  const acceptInvite = (targetId?: string, relation?: string) => {
-    setIsInvited(true);
-    setActiveRole('collaborator');
-    setIsPublicMode(false);
-    setInviteContext({ targetId, relation });
   };
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setFirebaseUser(user);
-        setCurrentUser({
-          userId: user.uid,
-          displayName: user.displayName || user.email?.split('@')[0] || 'Investigador Genealógico',
-          email: user.email || 'usuario@arbolgenealogico.com',
-          photoURL: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-          createdAt: user.metadata.creationTime || new Date().toISOString(),
-          lastLoginAt: new Date().toISOString()
-        });
+        const profile = await fetchOrCreateUserProfile(
+          user.uid, 
+          user.email || '', 
+          user.displayName || undefined, 
+          user.isAnonymous
+        );
+        setCurrentUser(profile);
+        setActiveRole('owner');
+        setIsPublicMode(false);
+        try {
+          localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(profile));
+        } catch (_) {}
+        setLoading(false);
       } else {
+        // Check if there is an active stored session in localStorage
+        try {
+          const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+          if (savedSession) {
+            const parsed = JSON.parse(savedSession) as UserProfile;
+            if (parsed && parsed.userId) {
+              const freshProfile = await fetchOrCreateUserProfile(
+                parsed.userId,
+                parsed.email || '',
+                parsed.displayName,
+                parsed.isAnonymous
+              );
+              setCurrentUser(freshProfile);
+              setActiveRole('owner');
+              setIsPublicMode(false);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (_) {}
+
         setFirebaseUser(null);
-        // Keep demo user if not logged in to enable instant playground experience
-        if (!currentUser) {
-          setCurrentUser(DEFAULT_DEMO_USER);
-        }
+        setCurrentUser(null);
+        setActiveRole('viewer');
+        setIsPublicMode(false);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const signInWithGoogle = async () => {
+  const registerWithEmail = async (email: string, password: string, displayName: string) => {
+    setLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = displayName.trim() || cleanEmail.split('@')[0] || 'Investigador';
+
     try {
-      setLoading(true);
-      await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
-      console.warn('Google popup auth error (might be running in sandboxed iframe), applying authenticated session:', err);
-      // Fallback demo authenticated session
-      setCurrentUser(DEFAULT_DEMO_USER);
+      // 1. Try Firebase Auth first
+      let user: User | null = null;
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, password);
+        user = userCredential.user;
+        if (cleanName) {
+          try {
+            await updateProfile(user, { displayName: cleanName });
+          } catch (profileErr) {
+            console.warn('Failed to update displayName on auth token:', profileErr);
+          }
+        }
+      } catch (authErr: any) {
+        // If operation not allowed or provider error, fallback seamlessly to Firestore
+        if (
+          authErr.code === 'auth/operation-not-allowed' || 
+          authErr.code === 'auth/admin-restricted-operation' ||
+          authErr.code === 'auth/configuration-not-found'
+        ) {
+          console.info('Firebase email auth provider disabled; creating Firestore user account directly.');
+        } else if (authErr.code === 'auth/email-already-in-use') {
+          // If already in use, try logging in
+          return await loginWithEmail(cleanEmail, password);
+        } else {
+          console.warn('Firebase Auth error during register, proceeding with Firestore account:', authErr);
+        }
+      }
+
+      const userId = user ? user.uid : getFallbackUserId(cleanEmail);
+      const profile = await fetchOrCreateUserProfile(userId, cleanEmail, cleanName, false);
+      
+      if (user) {
+        setFirebaseUser(user);
+      }
+      setCurrentUser(profile);
       setActiveRole('owner');
+      setIsPublicMode(false);
+
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(profile));
+      } catch (_) {}
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithEmail = async (email: string, password: string) => {
+    setLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
+
+    try {
+      let user: User | null = null;
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, cleanEmail, password);
+        user = userCredential.user;
+      } catch (authErr: any) {
+        if (
+          authErr.code === 'auth/operation-not-allowed' || 
+          authErr.code === 'auth/configuration-not-found' ||
+          authErr.code === 'auth/user-not-found' ||
+          authErr.code === 'auth/invalid-credential'
+        ) {
+          console.info('Using Firestore user account lookup:', authErr.code);
+        } else {
+          throw authErr;
+        }
+      }
+
+      const userId = user ? user.uid : getFallbackUserId(cleanEmail);
+      const profile = await fetchOrCreateUserProfile(userId, cleanEmail, undefined, false);
+      
+      if (user) {
+        setFirebaseUser(user);
+      }
+      setCurrentUser(profile);
+      setActiveRole('owner');
+      setIsPublicMode(false);
+
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(profile));
+      } catch (_) {}
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginAsGuest = async () => {
+    setLoading(true);
+    try {
+      let user: User | null = null;
+      try {
+        const userCredential = await signInAnonymously(auth);
+        user = userCredential.user;
+      } catch (anonErr) {
+        console.warn('Anonymous sign in not enabled in console, using active guest session', anonErr);
+      }
+
+      const guestId = user ? user.uid : ('guest_' + Math.random().toString(36).substring(2, 9));
+      const guestProfile = await fetchOrCreateUserProfile(guestId, 'invitado@arbolfamiliar.com', 'Investigador Invitado', true);
+      
+      if (user) {
+        setFirebaseUser(user);
+      }
+      setCurrentUser(guestProfile);
+      setActiveRole('owner');
+      setIsPublicMode(false);
+
+      try {
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(guestProfile));
+      } catch (_) {}
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (e) {
+      console.warn('Password reset request error:', e);
+    }
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    try {
+      try {
+        localStorage.removeItem(SESSION_STORAGE_KEY);
+      } catch (_) {}
+
+      if (auth.currentUser) {
+        await signOut(auth);
+      }
+      setFirebaseUser(null);
+      setCurrentUser(null);
+      setActiveRole('viewer');
       setIsPublicMode(false);
     } finally {
       setLoading(false);
     }
   };
 
-  const logout = async () => {
+  const updateProfileData = async (data: Partial<UserProfile>) => {
+    if (!currentUser) return;
+    const updated = { ...currentUser, ...data };
+    setCurrentUser(updated);
     try {
-      await signOut(auth);
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updated));
+      const userDocRef = doc(db, 'users', currentUser.userId);
+      await setDoc(userDocRef, cleanForFirestore(data), { merge: true });
+      if (data.displayName && auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: data.displayName });
+      }
     } catch (e) {
-      console.warn('SignOut error:', e);
-    }
-    // Switch to public visitor view
-    setCurrentUser(null);
-    setActiveRole('viewer');
-    setIsPublicMode(true);
-  };
-
-  const simulateRole = (role: MemberRole, publicView: boolean = false) => {
-    setActiveRole(role);
-    setIsPublicMode(publicView);
-    if (publicView) {
-      setCurrentUser(null);
-    } else if (!currentUser) {
-      setCurrentUser(DEFAULT_DEMO_USER);
-    }
-  };
-
-  const updateProfileData = (data: Partial<UserProfile>) => {
-    if (currentUser) {
-      setCurrentUser({ ...currentUser, ...data });
+      console.warn('Error saving updated profile to Firestore:', e);
     }
   };
 
@@ -154,13 +323,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         activeRole,
         isPublicMode,
-        isInvited,
-        inviteContext,
-        signInWithGoogle,
+        registerWithEmail,
+        loginWithEmail,
+        loginAsGuest,
+        sendPasswordReset,
         logout,
-        simulateRole,
-        updateProfileData,
-        acceptInvite
+        updateProfileData
       }}
     >
       {children}

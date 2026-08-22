@@ -1,8 +1,8 @@
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { 
-  ZoomIn, ZoomOut, RotateCcw, Layers, Eye, Plus, Sparkles, 
+  ZoomIn, ZoomOut, RotateCcw, RotateCw, Layers, Eye, Plus, Sparkles, 
   Move, Shield, Share2, Users, FileText, Activity, HelpCircle,
-  Trash2, X, BookMarked, Palette
+  Trash2, X, BookMarked, Palette, GitBranch, GitCommit, AlertTriangle
 } from 'lucide-react';
 import { Person, RelationshipType } from '../../types';
 import { useTree } from '../../context/TreeContext';
@@ -21,6 +21,7 @@ interface InteractiveTreeViewProps {
   onOpenFullHistory?: () => void;
   onOpenBookModal?: () => void;
   onOpenSurnameStyles?: () => void;
+  onOpenGitModal?: (tab?: 'history' | 'branches' | 'merge' | 'abandoned') => void;
 }
 
 interface TreeNodePosition {
@@ -41,14 +42,16 @@ export const InteractiveTreeView: React.FC<InteractiveTreeViewProps> = ({
   onOpenAddRelative,
   onOpenFullHistory,
   onOpenBookModal,
-  onOpenSurnameStyles
+  onOpenSurnameStyles,
+  onOpenGitModal
 }) => {
   const { 
     people, relationships, selectedPersonId, setSelectedPersonId, 
     canEdit, activeTree, deletePerson, movePersonPosition,
-    createEmptyInitialTemplate, resetToDemoTree, logUserMovement 
+    createEmptyInitialTemplate, resetToDemoTree, logUserMovement,
+    undo, redo, branches, activeBranchId, commits
   } = useTree();
-  const { isInvited, activeRole } = useAuth();
+  const { activeRole } = useAuth();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<number>(0.92);
@@ -488,6 +491,38 @@ export const InteractiveTreeView: React.FC<InteractiveTreeViewProps> = ({
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
+
+        {/* Git Undo / Redo in Tree Canvas */}
+        {canEdit && (
+          <div className="hidden sm:flex items-center space-x-1 bg-[#FDFBF7] p-1 rounded-full border border-[#D1CEC7] shadow-2xs">
+            <button
+              onClick={() => undo()}
+              className="p-1.5 text-[#7C796F] hover:text-[#434331] hover:bg-[#F5F2ED] rounded-full transition-colors cursor-pointer"
+              title="Deshacer movimiento (Ctrl+Z)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => redo()}
+              className="p-1.5 text-[#7C796F] hover:text-[#434331] hover:bg-[#F5F2ED] rounded-full transition-colors cursor-pointer"
+              title="Rehacer movimiento (Ctrl+Shift+Z)"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Git Branch Pill in Canvas */}
+        {onOpenGitModal && (
+          <button
+            onClick={() => onOpenGitModal('branches')}
+            className="hidden lg:flex items-center space-x-1.5 px-3 py-1.5 bg-[#FDFBF7] hover:bg-[#E5E2D9] text-[#434331] text-xs font-serif rounded-full border border-[#D1CEC7] transition-colors cursor-pointer shadow-2xs"
+            title="Ver ramas y puntos de restauración Git"
+          >
+            <GitBranch className="w-3.5 h-3.5 text-[#5A5A40]" />
+            <span className="font-semibold">{branches.find(b => b.id === activeBranchId)?.name || 'main'}</span>
+          </button>
+        )}
 
         {/* Focus selected */}
         {selectedPersonId && (
