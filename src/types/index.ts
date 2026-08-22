@@ -427,3 +427,5 @@ export interface BranchDiffSummary {
   hasConflicts?: boolean;
   conflicts?: any[];
 }
+
+export * from './familyLobby';

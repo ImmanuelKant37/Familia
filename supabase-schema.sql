@@ -1,9 +1,9 @@
 -- ==============================================================================
--- ESQUEMA SQL PARA ÁRBOL GENEALÓGICO FAMILIAR (SUPABASE POSTGRESQL)
--- Ejecuta este script completo en el SQL Editor de tu consola de Supabase.
+-- ESQUEMA SQL COMPLETO PARA ÁRBOL GENEALÓGICO FAMILIAR (SUPABASE POSTGRESQL)
+-- Copia y pega este script en el SQL Editor de tu consola de Supabase y ejecútalo.
 -- ==============================================================================
 
--- 1. Habilitar extensión UUID
+-- 1. Habilitar extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 2. TABLA DE PERFILES DE USUARIO (users)
@@ -18,10 +18,10 @@ CREATE TABLE IF NOT EXISTS public.users (
   storage_mode TEXT DEFAULT 'cloud',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   last_login_at TIMESTAMPTZ DEFAULT NOW(),
-  privacy_preferences JSONB DEFAULT '{"hideEmailFromMembers": false, "allowPublicBranchContributions": true, "showLivingRecords": false}'::jsonb
+  privacy_preferences JSONB DEFAULT '{"hideEmailFromMembers": false, "notifyOnRequests": true, "notifyOnProposals": true}'::jsonb
 );
 
--- Trigger para crear perfil automáticamente al registrarse en Supabase Auth
+-- Trigger para sincronizar automáticamente usuarios al registrarse en Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -29,8 +29,8 @@ BEGIN
   VALUES (
     NEW.id,
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)),
-    NEW.raw_user_meta_data->>'avatar_url'
+    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.raw_user_meta_data->>'name', NEW.raw_user_meta_data->>'display_name', split_part(NEW.email, '@', 1)),
+    COALESCE(NEW.raw_user_meta_data->>'avatar_url', NEW.raw_user_meta_data->>'picture')
   )
   ON CONFLICT (id) DO UPDATE
   SET 
@@ -50,7 +50,7 @@ CREATE TRIGGER on_auth_user_created
 -- 3. TABLA DE ÁRBOLES GENEALÓGICOS (trees)
 CREATE TABLE IF NOT EXISTS public.trees (
   id TEXT PRIMARY KEY,
-  owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  owner_id TEXT NOT NULL,
   owner_name TEXT,
   owner_email TEXT,
   name TEXT NOT NULL,
@@ -72,25 +72,34 @@ CREATE TABLE IF NOT EXISTS public.trees (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. TABLA DE PERSONAS / MIEMBROS DEL ÁRBOL (people)
+-- 4. TABLA DE PERSONAS / FAMILIARES (people)
 CREATE TABLE IF NOT EXISTS public.people (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
   first_name TEXT NOT NULL,
+  middle_name TEXT,
   last_name TEXT,
   maiden_name TEXT,
-  nickname TEXT,
   gender TEXT DEFAULT 'unknown',
+  birth_date TEXT,
+  birth_date_approx TEXT,
+  birth_place TEXT,
+  birth_coordinates JSONB,
+  death_date TEXT,
+  death_date_approx TEXT,
+  death_place TEXT,
+  death_coordinates JSONB,
   is_living BOOLEAN DEFAULT true,
   bio TEXT,
-  avatar_url TEXT,
-  cause_of_death TEXT,
-  resting_place TEXT,
   profession TEXT,
-  contact_info JSONB,
-  lineage_tags TEXT[] DEFAULT ARRAY[]::TEXT[],
-  attributes JSONB DEFAULT '[]'::jsonb,
+  nationality TEXT,
+  avatar_url TEXT,
+  aliases TEXT[] DEFAULT ARRAY[]::TEXT[],
+  notes TEXT,
+  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
   certainty TEXT DEFAULT 'confirmed',
+  source_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
+  is_private BOOLEAN DEFAULT false,
   position JSONB DEFAULT '{"x": 400, "y": 300}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -100,43 +109,55 @@ CREATE TABLE IF NOT EXISTS public.people (
 CREATE TABLE IF NOT EXISTS public.relationships (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
-  person_a_id TEXT NOT NULL,
-  person_b_id TEXT NOT NULL,
-  type TEXT NOT NULL, -- parent_child, spouse, partner, adoptive_parent, foster_parent
-  subtype TEXT,
+  person1_id TEXT NOT NULL,
+  person2_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  custom_type_label TEXT,
   start_date TEXT,
   end_date TEXT,
   notes TEXT,
   certainty TEXT DEFAULT 'confirmed',
+  source_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. TABLA DE EVENTOS VITALES / HITOS (events)
+-- 6. TABLA DE EVENTOS VITALES (events)
 CREATE TABLE IF NOT EXISTS public.events (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
-  person_id TEXT,
+  title TEXT NOT NULL,
   person_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
-  type TEXT NOT NULL, -- birth, death, marriage, migration, baptism, graduation, etc.
+  type TEXT NOT NULL,
   date TEXT,
+  date_approx TEXT,
   place TEXT,
+  coordinates JSONB,
   description TEXT,
-  is_historical BOOLEAN DEFAULT false,
+  media_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
+  source_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
+  certainty TEXT DEFAULT 'confirmed',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 7. TABLA DE ARCHIVOS MULTIMEDIA / FOTOS (media)
+-- 7. TABLA DE MULTIMEDIA Y ARCHIVOS HISTÓRICOS (media)
 CREATE TABLE IF NOT EXISTS public.media (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
   url TEXT NOT NULL,
-  type TEXT NOT NULL, -- photo, document, audio, video
+  type TEXT NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
-  date TEXT,
-  tagged_person_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
-  face_coordinates JSONB,
-  uploaded_by UUID,
+  file_size NUMERIC,
+  mime_type TEXT,
+  uploaded_by TEXT,
+  uploaded_by_name TEXT,
+  related_person_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
+  related_event_id TEXT,
+  historical_date TEXT,
+  historical_place TEXT,
+  source_id TEXT,
+  visibility TEXT DEFAULT 'members',
+  tags TEXT[] DEFAULT ARRAY[]::TEXT[],
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -145,74 +166,88 @@ CREATE TABLE IF NOT EXISTS public.sources (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
+  type TEXT DEFAULT 'document',
   repository TEXT,
+  url TEXT,
   citation TEXT,
-  document_url TEXT,
-  certainty_level TEXT DEFAULT 'medium',
+  confidence TEXT DEFAULT 'confirmed',
   notes TEXT,
-  linked_person_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
-  linked_event_ids TEXT[] DEFAULT ARRAY[]::TEXT[],
+  media_id TEXT,
+  created_by TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. TABLA DE SOLICITUDES DE ACCESO (requests)
+-- 9. TABLA DE SOLICITUDES DE ACCESO (access_requests)
 CREATE TABLE IF NOT EXISTS public.access_requests (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
-  requester_id UUID,
-  requester_name TEXT,
-  requester_email TEXT,
-  requested_role TEXT DEFAULT 'viewer',
-  claimed_relative_name TEXT,
+  user_id TEXT,
+  user_name TEXT,
+  user_email TEXT,
+  user_photo TEXT,
   message TEXT,
+  family_relation TEXT,
+  contribution_intent TEXT,
+  requested_role TEXT DEFAULT 'viewer',
   status TEXT DEFAULT 'pending',
-  reviewed_by UUID,
+  reviewed_by TEXT,
   reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 10. TABLA DE PROPUESTAS DE CAMBIO (proposals)
+-- 10. TABLA DE PROPUESTAS DE COLABORACIÓN (proposals)
 CREATE TABLE IF NOT EXISTS public.proposals (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
-  proposed_by UUID,
-  proposer_name TEXT,
-  title TEXT NOT NULL,
-  description TEXT,
-  status TEXT DEFAULT 'pending', -- pending, approved, rejected
-  changes JSONB DEFAULT '[]'::jsonb,
-  reviewed_by UUID,
+  target_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  target_name TEXT,
+  field_changed TEXT,
+  current_value JSONB,
+  proposed_value JSONB,
+  proposed_by TEXT,
+  proposed_by_name TEXT,
+  source_note TEXT,
+  reason TEXT,
+  status TEXT DEFAULT 'pending',
+  reviewed_by TEXT,
   reviewed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 11. TABLA DE HISTORIAL DE CAMBIOS (changes)
+-- 11. TABLA DE HISTORIAL DE CAMBIOS Y AUDITORÍA (changes)
 CREATE TABLE IF NOT EXISTS public.changes (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
   entity_type TEXT NOT NULL,
   entity_id TEXT NOT NULL,
+  entity_name TEXT,
   action TEXT NOT NULL,
-  diff JSONB,
-  author_id UUID,
-  author_name TEXT,
-  timestamp TIMESTAMPTZ DEFAULT NOW()
+  summary TEXT,
+  user_id TEXT,
+  userName TEXT,
+  user_name TEXT,
+  user_photo TEXT,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  previous_snapshot JSONB,
+  new_snapshot JSONB
 );
 
--- 12. TABLA DE COMENTARIOS HISTÓRICOS (comments)
+-- 12. TABLA DE COMENTARIOS (comments)
 CREATE TABLE IF NOT EXISTS public.comments (
   id TEXT PRIMARY KEY,
   tree_id TEXT NOT NULL REFERENCES public.trees(id) ON DELETE CASCADE,
-  person_id TEXT NOT NULL,
-  author_id UUID,
-  author_name TEXT NOT NULL,
-  author_role TEXT,
+  target_type TEXT DEFAULT 'person',
+  target_id TEXT NOT NULL,
+  user_id TEXT,
+  user_name TEXT,
+  user_photo TEXT,
   content TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ==============================================================================
--- POLÍTICAS DE SEGURIDAD ROW LEVEL SECURITY (RLS)
+-- HABILITAR ROW LEVEL SECURITY (RLS)
 -- ==============================================================================
 
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -227,115 +262,42 @@ ALTER TABLE public.proposals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.changes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 
--- 1. Reglas para users
-CREATE POLICY "Permitir lectura de perfiles a usuarios autenticados"
-  ON public.users FOR SELECT TO authenticated USING (true);
+-- POLÍTICAS RLS BÁSICAS (Lectura y escritura para usuarios autenticados)
+DROP POLICY IF EXISTS "allow_auth_users_all" ON public.users;
+CREATE POLICY "allow_auth_users_all" ON public.users FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
-CREATE POLICY "Permitir a cada usuario actualizar su propio perfil"
-  ON public.users FOR UPDATE TO authenticated USING (auth.uid() = id);
+DROP POLICY IF EXISTS "allow_anon_users_read" ON public.users;
+CREATE POLICY "allow_anon_users_read" ON public.users FOR SELECT TO anon USING (true);
 
-CREATE POLICY "Permitir inserción de perfiles"
-  ON public.users FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
+DROP POLICY IF EXISTS "allow_trees_auth" ON public.trees;
+CREATE POLICY "allow_trees_auth" ON public.trees FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
--- 2. Reglas para trees (Acceso de propietario o miembro invitado)
-CREATE POLICY "Lectura de arboles permitida para duenos, miembros o arboles publicos"
-  ON public.trees FOR SELECT TO authenticated
-  USING (
-    owner_id = auth.uid() 
-    OR visibility = 'public' 
-    OR visibility = 'members'
-    OR members @> jsonb_build_array(jsonb_build_object('userId', auth.uid()::text))
-  );
+DROP POLICY IF EXISTS "allow_trees_anon" ON public.trees;
+CREATE POLICY "allow_trees_anon" ON public.trees FOR SELECT TO anon USING (true);
 
-CREATE POLICY "Creacion de arboles para usuarios autenticados"
-  ON public.trees FOR INSERT TO authenticated
-  WITH CHECK (owner_id = auth.uid());
+DROP POLICY IF EXISTS "allow_people_all" ON public.people;
+CREATE POLICY "allow_people_all" ON public.people FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
-CREATE POLICY "Modificacion de arboles solo para el dueno"
-  ON public.trees FOR UPDATE TO authenticated
-  USING (owner_id = auth.uid());
+DROP POLICY IF EXISTS "allow_relationships_all" ON public.relationships;
+CREATE POLICY "allow_relationships_all" ON public.relationships FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
-CREATE POLICY "Eliminacion de arboles solo para el dueno"
-  ON public.trees FOR DELETE TO authenticated
-  USING (owner_id = auth.uid());
+DROP POLICY IF EXISTS "allow_events_all" ON public.events;
+CREATE POLICY "allow_events_all" ON public.events FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
--- 3. Reglas para personas (people)
-CREATE POLICY "Acceso a personas de arboles autorizados"
-  ON public.people FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.people.tree_id 
-      AND (
-        public.trees.owner_id = auth.uid() 
-        OR public.trees.visibility = 'public' 
-        OR public.trees.members @> jsonb_build_array(jsonb_build_object('userId', auth.uid()::text))
-      )
-    )
-  );
+DROP POLICY IF EXISTS "allow_media_all" ON public.media;
+CREATE POLICY "allow_media_all" ON public.media FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
--- 4. Reglas para relationships
-CREATE POLICY "Acceso a relaciones de arboles autorizados"
-  ON public.relationships FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.relationships.tree_id 
-      AND (
-        public.trees.owner_id = auth.uid() 
-        OR public.trees.visibility = 'public' 
-        OR public.trees.members @> jsonb_build_array(jsonb_build_object('userId', auth.uid()::text))
-      )
-    )
-  );
+DROP POLICY IF EXISTS "allow_sources_all" ON public.sources;
+CREATE POLICY "allow_sources_all" ON public.sources FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
--- 5. Reglas para events, media, sources, etc.
-CREATE POLICY "Acceso a eventos de arboles autorizados"
-  ON public.events FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.events.tree_id 
-      AND (public.trees.owner_id = auth.uid() OR public.trees.visibility = 'public')
-    )
-  );
+DROP POLICY IF EXISTS "allow_requests_all" ON public.access_requests;
+CREATE POLICY "allow_requests_all" ON public.access_requests FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
-CREATE POLICY "Acceso a multimedia de arboles autorizados"
-  ON public.media FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.media.tree_id 
-      AND (public.trees.owner_id = auth.uid() OR public.trees.visibility = 'public')
-    )
-  );
+DROP POLICY IF EXISTS "allow_proposals_all" ON public.proposals;
+CREATE POLICY "allow_proposals_all" ON public.proposals FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
-CREATE POLICY "Acceso a fuentes de arboles autorizados"
-  ON public.sources FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.sources.tree_id 
-      AND (public.trees.owner_id = auth.uid() OR public.trees.visibility = 'public')
-    )
-  );
+DROP POLICY IF EXISTS "allow_changes_all" ON public.changes;
+CREATE POLICY "allow_changes_all" ON public.changes FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);
 
-CREATE POLICY "Acceso a comentarios de arboles autorizados"
-  ON public.comments FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.comments.tree_id 
-      AND (public.trees.owner_id = auth.uid() OR public.trees.visibility = 'public')
-    )
-  );
-
-CREATE POLICY "Acceso a cambios de arboles autorizados"
-  ON public.changes FOR ALL TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.trees 
-      WHERE public.trees.id = public.changes.tree_id 
-      AND (public.trees.owner_id = auth.uid() OR public.trees.visibility = 'public')
-    )
-  );
+DROP POLICY IF EXISTS "allow_comments_all" ON public.comments;
+CREATE POLICY "allow_comments_all" ON public.comments FOR ALL TO authenticated, anon USING (true) WITH CHECK (true);

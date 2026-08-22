@@ -1710,9 +1710,9 @@ export const TreeProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSources(snap.sources || []);
     setMedia(snap.media || []);
 
-    const msg = customMessage || `⏪ Restaurado al estado del commit ${targetCommit.shortHash} ("${targetCommit.message}")`;
+    const msg = customMessage || `⏪ Restaurado al estado de la marca ${targetCommit.shortHash} ("${targetCommit.message}")`;
     await recordActionCommit('rollback', msg, snap, {
-      details: `Revertido histórico a ${targetCommit.shortHash}`
+      details: `Revertido histórico a la marca ${targetCommit.shortHash}`
     });
 
     await TreeService.bulkSavePeople(activeTree.id, snap.people || []);

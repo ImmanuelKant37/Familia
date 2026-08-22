@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   Users, UserPlus, Check, X, Shield, Mail, 
-  Copy, Sparkles, CheckCircle, Share2, ArrowRight
+  Copy, Sparkles, CheckCircle, Share2, ArrowRight, Compass, Key
 } from 'lucide-react';
 import { useTree } from '../../context/TreeContext';
 import { useAuth } from '../../context/AuthContext';
+import { useFamilyLobby } from '../../context/FamilyLobbyContext';
 import { MemberRole } from '../../types';
 
 interface CollaborationModalProps {
@@ -20,6 +21,7 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
     sendAccessRequest, canManage
   } = useTree();
   const { activeRole } = useAuth();
+  const { openLobby, openPermissionsManager, openMyAccessesModal } = useFamilyLobby();
 
   const [activeTab, setActiveTab] = useState<'members' | 'requests' | 'proposals' | 'share'>('members');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -152,6 +154,47 @@ export const CollaborationModal: React.FC<CollaborationModalProps> = ({
 
         {/* Content Area */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6 text-xs sm:text-sm">
+          
+          {/* Lobby & Granular Permissions Banner */}
+          <div className="p-4 bg-amber-50/80 rounded-2xl border border-amber-200 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-start space-x-2.5">
+              <Compass className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-serif font-bold text-sm text-amber-950 block">
+                  Lobby de Familias & Permisos por Ramas
+                </span>
+                <span className="text-[11px] text-amber-800">
+                  Descubre árboles públicos, solicita permisos delimitados por rama/apellido o administra los accesos de tus colaboradores.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  openLobby();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[#5A5A40] hover:bg-[#434331] text-white text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                <span>Explorar Lobby</span>
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  openPermissionsManager();
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold flex items-center space-x-1 cursor-pointer transition-colors shadow-xs"
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Gestión Granular</span>
+              </button>
+            </div>
+          </div>
           
           {/* TAB 1: MEMBERS */}
           {activeTab === 'members' && (

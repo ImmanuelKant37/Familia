@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Eye, Plus, MapPin, Image as ImageIcon, FileText, 
-  GripVertical, Share2, UserPlus, Heart, Sparkles, Edit3, HelpCircle
+  GripVertical, Share2, UserPlus, Heart, Sparkles, Edit3, HelpCircle,
+  Camera, Loader2, Upload
 } from 'lucide-react';
 import { Person, CertaintyLevel, RelationshipType } from '../../types';
 import { useTree } from '../../context/TreeContext';
 import { getSurnameStyle } from '../../utils/surnameTheme';
+import { SupabaseStorageService } from '../../services/supabaseStorageService';
 
 interface PersonCardProps {
   person: Person;
@@ -32,11 +34,41 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   onDropOnNode,
   compact = false
 }) => {
-  const { activeTree, getSanitizedPerson, media, sources, canEdit } = useTree();
+  const { activeTree, getSanitizedPerson, media, sources, canEdit, updatePerson } = useTree();
   const sanitized = getSanitizedPerson(person);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [activePlusMenu, setActivePlusMenu] = useState<'top' | 'bottom' | 'left' | 'right' | null>(null);
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
+  const handleQuickAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !canEdit) return;
+
+    setIsUploadingPhoto(true);
+    try {
+      const result = await SupabaseStorageService.uploadPersonAvatar(
+        file, 
+        person.id, 
+        activeTree?.id || 'default_tree'
+      );
+
+      if (result.publicUrl) {
+        await updatePerson({
+          ...person,
+          avatarUrl: result.publicUrl
+        });
+      }
+    } catch (err) {
+      console.error('Error uploading avatar to Supabase:', err);
+    } finally {
+      setIsUploadingPhoto(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   const isPlaceholder = Boolean(person.isPlaceholder || person.firstName.startsWith('['));
   const surnameStyle = getSurnameStyle(sanitized.lastName, activeTree?.settings?.surnameStyles);
@@ -47,7 +79,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
   const getCertaintyBadge = (certainty: CertaintyLevel) => {
     if (isPlaceholder) {
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300" title="Tarjeta Vacía - Pendiente de rellenar">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700/60" title="Tarjeta Vacía - Pendiente de rellenar">
           ⏳ Tarjeta Puente
         </span>
       );
@@ -56,26 +88,26 @@ export const PersonCard: React.FC<PersonCardProps> = ({
     switch (certainty) {
       case 'confirmed':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#5A5A40]/15 text-[#434331] border border-[#5A5A40]/30" title="Dato Confirmado por Fuentes">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#5A5A40]/15 dark:bg-emerald-950/60 text-[#434331] dark:text-emerald-300 border border-[#5A5A40]/30 dark:border-emerald-700/50" title="Dato Confirmado por Fuentes">
             ✓ Confirmado
           </span>
         );
       case 'probable':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#A65D47]/15 text-[#A65D47] border border-[#A65D47]/30" title="Dato Probable">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#A65D47]/15 dark:bg-amber-950/60 text-[#A65D47] dark:text-amber-300 border border-[#A65D47]/30 dark:border-amber-700/50" title="Dato Probable">
             ? Probable
           </span>
         );
       case 'estimated':
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#E5E2D9] text-[#7C796F] border border-[#D1CEC7]" title="Dato Estimado / Aproximado">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#E5E2D9] dark:bg-[#334155] text-[#7C796F] dark:text-[#94A3B8] border border-[#D1CEC7] dark:border-[#475569]" title="Dato Estimado / Aproximado">
             ~ Estimado
           </span>
         );
       case 'investigating':
       default:
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#F5F2ED] text-[#9A968A] border border-[#D1CEC7]" title="En Estudio">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#F5F2ED] dark:bg-[#1E293B] text-[#9A968A] dark:text-[#64748B] border border-[#D1CEC7] dark:border-[#334155]" title="En Estudio">
             🔍 En Estudio
           </span>
         );
@@ -134,8 +166,8 @@ export const PersonCard: React.FC<PersonCardProps> = ({
 
         {/* Action Popover Menu */}
         {isOpen && (
-          <div className={`absolute ${popoverPosition} z-40 bg-[#FDFBF7] border border-[#D1CEC7] rounded-2xl shadow-xl p-2 w-56 text-xs text-[#434331] animate-in fade-in zoom-in-95 backdrop-blur-md`}>
-            <div className="px-2 py-1 border-b border-[#E5E2D9] mb-1 font-serif font-bold text-[11px] text-[#5A5A40]">
+          <div className={`absolute ${popoverPosition} z-40 bg-[#FDFBF7] dark:bg-[#1E293B] border border-[#D1CEC7] dark:border-[#334155] rounded-2xl shadow-xl p-2 w-56 text-xs text-[#434331] dark:text-[#F1F5F9] animate-in fade-in zoom-in-95 backdrop-blur-md`}>
+            <div className="px-2 py-1 border-b border-[#E5E2D9] dark:border-[#334155] mb-1 font-serif font-bold text-[11px] text-[#5A5A40] dark:text-amber-400">
               {label}
             </div>
 
@@ -144,9 +176,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                 setActivePlusMenu(null);
                 if (onOpenAddRelative) onOpenAddRelative(person, relType);
               }}
-              className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs"
+              className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] dark:hover:bg-[#283548] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs"
             >
-              <UserPlus className="w-3.5 h-3.5 text-[#5A5A40]" />
+              <UserPlus className="w-3.5 h-3.5 text-[#5A5A40] dark:text-amber-400" />
               <span>Añadir {label} directo</span>
             </button>
 
@@ -157,9 +189,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                   setActivePlusMenu(null);
                   if (onOpenAddRelative) onOpenAddRelative(person, 'grandparent');
                 }}
-                className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs text-[#5A5A40] font-medium"
+                className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] dark:hover:bg-[#283548] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs text-[#5A5A40] dark:text-amber-400 font-medium"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[#A65D47]" />
+                <Sparkles className="w-3.5 h-3.5 text-[#A65D47] dark:text-amber-500" />
                 <span>Añadir Abuelo (Indirecto)</span>
               </button>
             )}
@@ -171,9 +203,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                   setActivePlusMenu(null);
                   if (onOpenAddRelative) onOpenAddRelative(person, 'uncle_aunt');
                 }}
-                className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs text-[#5A5A40] font-medium"
+                className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] dark:hover:bg-[#283548] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs text-[#5A5A40] dark:text-amber-400 font-medium"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[#A65D47]" />
+                <Sparkles className="w-3.5 h-3.5 text-[#A65D47] dark:text-amber-500" />
                 <span>Añadir Tío/a (Indirecto)</span>
               </button>
             )}
@@ -183,9 +215,9 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                 setActivePlusMenu(null);
                 if (onOpenInviteModal) onOpenInviteModal(person, relType);
               }}
-              className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs text-[#A65D47] font-semibold"
+              className="w-full text-left px-2.5 py-1.5 hover:bg-[#F5F2ED] dark:hover:bg-[#283548] rounded-xl flex items-center space-x-2 transition-colors font-sans text-xs text-[#A65D47] dark:text-amber-400 font-semibold"
             >
-              <Share2 className="w-3.5 h-3.5 text-[#A65D47]" />
+              <Share2 className="w-3.5 h-3.5 text-[#A65D47] dark:text-amber-400" />
               <span>Compartir enlace para rellenar</span>
             </button>
           </div>
@@ -214,14 +246,14 @@ export const PersonCard: React.FC<PersonCardProps> = ({
       }}
       className={`relative group rounded-2xl border-2 transition-all duration-200 cursor-pointer shadow-xs select-none overflow-hidden ${
         isPlaceholder 
-          ? 'bg-amber-50/70 border-dashed border-amber-400 hover:border-amber-500 hover:bg-amber-50' 
-          : 'bg-white/95 hover:shadow-md hover:-translate-y-0.5'
+          ? 'bg-amber-50/70 dark:bg-amber-950/40 border-dashed border-amber-400 dark:border-amber-700 hover:border-amber-500 dark:hover:border-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/60' 
+          : 'bg-white/95 dark:bg-[#1E293B]/95 hover:shadow-md hover:-translate-y-0.5'
       } ${
         isSelected
-          ? 'ring-3 ring-[#A65D47] ring-offset-2 border-[#A65D47] shadow-lg transform -translate-y-0.5 bg-white'
+          ? 'ring-3 ring-[#A65D47] dark:ring-amber-500 ring-offset-2 border-[#A65D47] dark:border-amber-500 shadow-lg transform -translate-y-0.5 bg-white dark:bg-[#1E293B]'
           : isDragOver
-          ? 'ring-2 ring-[#5A5A40] border-[#5A5A40] bg-[#F5F2ED]'
-          : !isPlaceholder ? 'border-[#E5E2D9]' : ''
+          ? 'ring-2 ring-[#5A5A40] dark:ring-amber-400 border-[#5A5A40] bg-[#F5F2ED] dark:bg-[#283548]'
+          : !isPlaceholder ? 'border-[#E5E2D9] dark:border-[#334155]' : ''
       } ${compact ? 'p-3 w-60' : 'p-4 w-68'}`}
       style={!isPlaceholder ? { borderTopColor: surnameStyle.bgColor } : undefined}
       id={`person-card-${person.id}`}
@@ -246,28 +278,28 @@ export const PersonCard: React.FC<PersonCardProps> = ({
         <div className="flex items-center gap-1 overflow-hidden">
           {getCertaintyBadge(sanitized.certainty)}
           {sanitized.isLiving && !isPlaceholder && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#5A5A40] text-white">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-sans font-semibold uppercase tracking-wider bg-[#5A5A40] dark:bg-emerald-600 text-white">
               Vivo
             </span>
           )}
         </div>
 
         {/* Media & Sources Counts + Drag Indicator */}
-        <div className="flex items-center space-x-1.5 text-[10px] text-[#9A968A] shrink-0 font-sans">
+        <div className="flex items-center space-x-1.5 text-[10px] text-[#9A968A] dark:text-[#64748B] shrink-0 font-sans">
           {personMediaCount > 0 && (
-            <span className="flex items-center space-x-0.5 bg-[#F5F2ED] px-1.5 py-0.5 rounded-md border border-[#E5E2D9]" title={`${personMediaCount} fotos`}>
-              <ImageIcon className="w-2.5 h-2.5 text-[#7C796F]" />
-              <span>{personMediaCount}</span>
+            <span className="flex items-center space-x-0.5 bg-[#F5F2ED] dark:bg-[#0F172A] px-1.5 py-0.5 rounded-md border border-[#E5E2D9] dark:border-[#334155]" title={`${personMediaCount} fotos`}>
+              <ImageIcon className="w-2.5 h-2.5 text-[#7C796F] dark:text-[#94A3B8]" />
+              <span className="text-[#434331] dark:text-[#CBD5E1]">{personMediaCount}</span>
             </span>
           )}
           {personSourcesCount > 0 && (
-            <span className="flex items-center space-x-0.5 bg-[#F5F2ED] px-1.5 py-0.5 rounded-md border border-[#E5E2D9]" title={`${personSourcesCount} fuentes`}>
-              <FileText className="w-2.5 h-2.5 text-[#7C796F]" />
-              <span>{personSourcesCount}</span>
+            <span className="flex items-center space-x-0.5 bg-[#F5F2ED] dark:bg-[#0F172A] px-1.5 py-0.5 rounded-md border border-[#E5E2D9] dark:border-[#334155]" title={`${personSourcesCount} fuentes`}>
+              <FileText className="w-2.5 h-2.5 text-[#7C796F] dark:text-[#94A3B8]" />
+              <span className="text-[#434331] dark:text-[#CBD5E1]">{personSourcesCount}</span>
             </span>
           )}
           {canEdit && (
-            <span className="text-[#9A968A] group-hover:text-[#5A5A40] transition-colors" title="Arrastrar para reposicionar o soltar sobre otro pariente">
+            <span className="text-[#9A968A] dark:text-[#64748B] group-hover:text-[#5A5A40] dark:group-hover:text-amber-400 transition-colors" title="Arrastrar para reposicionar o soltar sobre otro pariente">
               <GripVertical className="w-3.5 h-3.5" />
             </span>
           )}
@@ -276,21 +308,32 @@ export const PersonCard: React.FC<PersonCardProps> = ({
 
       {/* Main Body: Avatar & Names */}
       <div className="flex items-start space-x-3">
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 group/card-avatar">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={handleQuickAvatarUpload}
+            className="hidden"
+            id={`card-avatar-upload-${person.id}`}
+          />
+
           <div 
-            className={`w-12 h-12 rounded-full border-2 border-white shadow-xs overflow-hidden flex items-center justify-center ${
-              isPlaceholder ? 'bg-amber-200 text-amber-800' : 'bg-[#E5E2D9]'
+            className={`w-12 h-12 rounded-full border-2 border-white dark:border-[#334155] shadow-xs overflow-hidden flex items-center justify-center relative ${
+              isPlaceholder ? 'bg-amber-200 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300' : 'bg-[#E5E2D9] dark:bg-[#334155]'
             }`}
             style={!isPlaceholder ? { backgroundColor: `${surnameStyle.bgColor}25` } : undefined}
           >
-            {sanitized.avatarUrl ? (
+            {isUploadingPhoto ? (
+              <Loader2 className="w-5 h-5 text-[#5A5A40] dark:text-amber-400 animate-spin" />
+            ) : sanitized.avatarUrl ? (
               <img
                 src={sanitized.avatarUrl}
                 alt={sanitized.firstName}
                 className="w-full h-full object-cover"
               />
             ) : isPlaceholder ? (
-              <Edit3 className="w-5 h-5 text-amber-700" />
+              <Edit3 className="w-5 h-5 text-amber-700 dark:text-amber-400" />
             ) : (
               <span 
                 className="text-xs font-serif font-bold"
@@ -299,41 +342,56 @@ export const PersonCard: React.FC<PersonCardProps> = ({
                 {sanitized.firstName?.[0] || '?'}{sanitized.lastName?.[0] || ''}
               </span>
             )}
+
+            {/* Hover Camera Icon for Quick Supabase Upload */}
+            {canEdit && !isUploadingPhoto && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  fileInputRef.current?.click();
+                }}
+                className="absolute inset-0 bg-black/50 opacity-0 group-hover/card-avatar:opacity-100 flex items-center justify-center transition-opacity rounded-full text-white cursor-pointer"
+                title="Subir o cambiar foto en Supabase"
+              >
+                <Camera className="w-4 h-4 text-white" />
+              </button>
+            )}
           </div>
         </div>
 
         <div className="flex-1 min-w-0">
           {isPlaceholder ? (
             <div>
-              <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-amber-800 block">
+              <span className="text-[10px] font-sans font-bold uppercase tracking-wider text-amber-800 dark:text-amber-300 block">
                 {sanitized.placeholderRole || 'Pariente Intermedio'}
               </span>
-              <h4 className="font-serif font-bold text-amber-950 text-xs leading-snug">
+              <h4 className="font-serif font-bold text-amber-950 dark:text-amber-200 text-xs leading-snug">
                 {sanitized.firstName} {sanitized.lastName}
               </h4>
-              <p className="text-[10px] text-amber-700 font-sans mt-0.5">
+              <p className="text-[10px] text-amber-700 dark:text-amber-400 font-sans mt-0.5">
                 ✏️ Clic para rellenar datos
               </p>
             </div>
           ) : (
             <>
-              <h4 className="font-serif font-bold text-[#434331] text-sm leading-snug truncate">
+              <h4 className="font-serif font-bold text-[#434331] dark:text-[#F8FAFC] text-sm leading-snug truncate">
                 {sanitized.firstName} {sanitized.lastName}
               </h4>
               {sanitized.maidenName && (
-                <p className="text-[11px] text-[#7C796F] italic truncate">
+                <p className="text-[11px] text-[#7C796F] dark:text-[#94A3B8] italic truncate">
                   (n. {sanitized.maidenName})
                 </p>
               )}
 
               {/* Lifespan */}
-              <div className="text-xs text-[#7C796F] italic mt-0.5 font-serif">
+              <div className="text-xs text-[#7C796F] dark:text-[#94A3B8] italic mt-0.5 font-serif">
                 {birthYear} — {deathYear}
               </div>
 
               {/* Profession */}
               {sanitized.profession && (
-                <p className="text-[10px] uppercase tracking-wider text-[#9A968A] font-sans truncate mt-0.5">
+                <p className="text-[10px] uppercase tracking-wider text-[#9A968A] dark:text-[#64748B] font-sans truncate mt-0.5">
                   {sanitized.profession}
                 </p>
               )}
@@ -344,21 +402,21 @@ export const PersonCard: React.FC<PersonCardProps> = ({
 
       {/* Location bottom row */}
       {!isPlaceholder && sanitized.birthPlace && (
-        <div className="mt-2.5 pt-2 border-t border-[#E5E2D9] flex items-center space-x-1 text-[11px] text-[#7C796F] truncate">
-          <MapPin className="w-3 h-3 text-[#9A968A] shrink-0" />
+        <div className="mt-2.5 pt-2 border-t border-[#E5E2D9] dark:border-[#334155] flex items-center space-x-1 text-[11px] text-[#7C796F] dark:text-[#94A3B8] truncate">
+          <MapPin className="w-3 h-3 text-[#9A968A] dark:text-[#64748B] shrink-0" />
           <span className="truncate">{sanitized.birthPlace}</span>
         </div>
       )}
 
       {/* Quick Action Bar */}
-      <div className="mt-2.5 pt-2 border-t border-[#E5E2D9] flex items-center justify-between text-xs">
+      <div className="mt-2.5 pt-2 border-t border-[#E5E2D9] dark:border-[#334155] flex items-center justify-between text-xs">
         <button
           onClick={(e) => {
             e.stopPropagation();
             onOpenDetailModal(person);
           }}
-          className={`font-sans font-semibold uppercase tracking-wider text-[10px] flex items-center space-x-1 hover:underline ${
-            isPlaceholder ? 'text-amber-800' : 'text-[#5A5A40] hover:text-[#434331]'
+          className={`font-sans font-semibold uppercase tracking-wider text-[10px] flex items-center space-x-1 hover:underline cursor-pointer ${
+            isPlaceholder ? 'text-amber-800 dark:text-amber-300' : 'text-[#5A5A40] dark:text-amber-400 hover:text-[#434331] dark:hover:text-amber-300'
           }`}
         >
           {isPlaceholder ? <Edit3 className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
@@ -372,7 +430,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
               e.stopPropagation();
               if (onOpenInviteModal) onOpenInviteModal(person, 'relative');
             }}
-            className="text-[#7C796F] hover:text-[#A65D47] hover:bg-[#F5F2ED] p-1 rounded-full transition-colors"
+            className="text-[#7C796F] dark:text-[#94A3B8] hover:text-[#A65D47] dark:hover:text-amber-400 hover:bg-[#F5F2ED] dark:hover:bg-[#283548] p-1 rounded-full transition-colors cursor-pointer"
             title="Compartir enlace para invitar a rellenar"
           >
             <Share2 className="w-3.5 h-3.5" />
@@ -381,7 +439,7 @@ export const PersonCard: React.FC<PersonCardProps> = ({
           {/* Context Options Button */}
           <button
             onClick={handleContextMenu}
-            className="text-[#7C796F] hover:text-[#5A5A40] hover:bg-[#F5F2ED] px-1.5 py-0.5 rounded-md text-[10px] font-sans font-semibold transition-colors"
+            className="text-[#7C796F] dark:text-[#94A3B8] hover:text-[#5A5A40] dark:hover:text-white hover:bg-[#F5F2ED] dark:hover:bg-[#283548] px-1.5 py-0.5 rounded-md text-[10px] font-sans font-semibold transition-colors cursor-pointer"
             title="Clic derecho para más opciones"
           >
             •••

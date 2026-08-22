@@ -2,7 +2,8 @@ import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react'
 import { 
   ZoomIn, ZoomOut, RotateCcw, RotateCw, Layers, Eye, Plus, Sparkles, 
   Move, Shield, Share2, Users, FileText, Activity, HelpCircle,
-  Trash2, X, BookMarked, Palette, GitBranch, GitCommit, AlertTriangle
+  Trash2, X, BookMarked, Palette, GitBranch, GitCommit, AlertTriangle,
+  Bot
 } from 'lucide-react';
 import { Person, RelationshipType } from '../../types';
 import { useTree } from '../../context/TreeContext';
@@ -22,6 +23,7 @@ interface InteractiveTreeViewProps {
   onOpenBookModal?: () => void;
   onOpenSurnameStyles?: () => void;
   onOpenGitModal?: (tab?: 'history' | 'branches' | 'merge' | 'abandoned') => void;
+  onOpenChatAssistant?: () => void;
 }
 
 interface TreeNodePosition {
@@ -43,7 +45,8 @@ export const InteractiveTreeView: React.FC<InteractiveTreeViewProps> = ({
   onOpenFullHistory,
   onOpenBookModal,
   onOpenSurnameStyles,
-  onOpenGitModal
+  onOpenGitModal,
+  onOpenChatAssistant
 }) => {
   const { 
     people, relationships, selectedPersonId, setSelectedPersonId, 
@@ -560,6 +563,18 @@ export const InteractiveTreeView: React.FC<InteractiveTreeViewProps> = ({
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Añadir</span>
+          </button>
+        )}
+
+        {/* NLP Chat Assistant */}
+        {canEdit && onOpenChatAssistant && (
+          <button
+            onClick={onOpenChatAssistant}
+            className="flex items-center space-x-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-sans font-semibold uppercase tracking-wider px-3.5 py-1.5 rounded-full border border-amber-300 transition-colors shadow-2xs cursor-pointer"
+            title="Asistente Chat NLP: Escribe 'A es hijo de B' para crear y conectar tarjetas rápidamente"
+          >
+            <Bot className="w-3.5 h-3.5 text-amber-700" />
+            <span className="hidden sm:inline">Asistente Chat</span>
           </button>
         )}
 

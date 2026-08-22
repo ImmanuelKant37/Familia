@@ -122,7 +122,7 @@ export const GitVersionModal: React.FC<GitVersionModalProps> = ({
 
   // Handle restore / rollback commit
   const handleRestoreCommit = async (commit: TreeCommit) => {
-    const confirmMsg = `¿Deseas restaurar el árbol al estado del commit "${commit.message}"? (Generará un nuevo punto en el historial conservando la trazabilidad).`;
+    const confirmMsg = `¿Deseas restaurar el árbol al estado de la marca "${commit.message}"? (Generará una nueva traza en el historial conservando la trazabilidad).`;
     if (window.confirm(confirmMsg)) {
       await restoreCommit(commit.id);
       onClose();
@@ -173,7 +173,7 @@ export const GitVersionModal: React.FC<GitVersionModalProps> = ({
             }`}
           >
             <GitCommit className="w-4 h-4" />
-            <span>Puntos de Restauración ({commits.length})</span>
+            <span>Marcas de Guardado ({commits.length})</span>
           </button>
 
           <button
@@ -251,7 +251,7 @@ export const GitVersionModal: React.FC<GitVersionModalProps> = ({
               <div className="relative pl-6 space-y-6 before:content-[''] before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-[#D1CEC7]">
                 {filteredCommits.length === 0 ? (
                   <div className="p-8 text-center text-xs text-[#9A968A] font-serif italic">
-                    No hay puntos de restauración registrados en esta rama aún.
+                    No hay marcas ni trazas registradas en esta rama aún.
                   </div>
                 ) : (
                   filteredCommits.map((commit, idx) => {
@@ -399,7 +399,7 @@ export const GitVersionModal: React.FC<GitVersionModalProps> = ({
                                   setShowCreateBranchForm(true);
                                 }}
                                 className="px-2.5 py-1 text-xs bg-[#F5F2ED] hover:bg-[#E5E2D9] text-[#7C796F] hover:text-[#434331] rounded-full border border-[#D1CEC7] transition-colors flex items-center space-x-1 cursor-pointer"
-                                title="Crear nueva rama a partir de este commit"
+                                title="Crear nueva rama a partir de esta marca"
                               >
                                 <GitBranch className="w-3 h-3 text-[#7C796F]" />
                                 <span>Rama aquí</span>
@@ -510,7 +510,7 @@ export const GitVersionModal: React.FC<GitVersionModalProps> = ({
                         <div className="flex items-center space-x-3 text-[11px] text-[#9A968A] font-mono">
                           <span>Creada por: {branch.createdBy?.userName || branch.createdByName || 'Usuario'}</span>
                           <span>•</span>
-                          <span>{branchCommitsCount} {branchCommitsCount === 1 ? 'punto registrado' : 'puntos registrados'}</span>
+                          <span>{branchCommitsCount} {branchCommitsCount === 1 ? 'marca registrada' : 'marcas registradas'}</span>
                           <span>•</span>
                           <span>{new Date(branch.createdAt).toLocaleDateString()}</span>
                         </div>

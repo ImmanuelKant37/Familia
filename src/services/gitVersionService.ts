@@ -43,7 +43,7 @@ export class GitVersionService {
     treeId: string,
     snapshot: TreeSnapshot,
     author: CommitAuthor,
-    customMessage: string = 'Commit Inicial: Estructura del árbol familiar'
+    customMessage: string = 'Marca Inicial: Estructura del árbol familiar'
   ): { commit: TreeCommit; branch: TreeBranch } {
     const { id, shortHash } = this.generateCommitId();
     const timestamp = new Date().toISOString();

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   BookOpen, Plus, ExternalLink, 
-  Search, Shield, MapPin, FileText, UserCheck, X, Trash2
+  Search, Shield, MapPin, FileText, UserCheck, X, Trash2, HardDrive
 } from 'lucide-react';
 import { useTree } from '../../context/TreeContext';
 import { CertaintyLevel } from '../../types';
+import { ImageUploadDropzone } from '../common/ImageUploadDropzone';
 
 interface SourcesListViewProps {
   onSelectPersonById: (personId: string) => void;
@@ -13,7 +14,7 @@ interface SourcesListViewProps {
 export const SourcesListView: React.FC<SourcesListViewProps> = ({
   onSelectPersonById
 }) => {
-  const { sources, people, addSource, deleteSource, canEdit } = useTree();
+  const { sources, people, addSource, deleteSource, canEdit, activeTree } = useTree();
   const [search, setSearch] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -230,13 +231,15 @@ export const SourcesListView: React.FC<SourcesListViewProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Grado de Certeza</label>
+                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                    Grado de Certeza
+                  </label>
                   <select
                     value={srcConfidence}
                     onChange={(e) => setSrcConfidence(e.target.value as CertaintyLevel)}
-                    className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   >
                     <option value="confirmed">Confirmado (Primaria)</option>
                     <option value="probable">Probable (Secundaria)</option>
@@ -245,25 +248,46 @@ export const SourcesListView: React.FC<SourcesListViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Enlace / URL (Opcional)</label>
+                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                    Enlace / URL de la Fuente
+                  </label>
                   <input
                     type="url"
                     value={srcUrl}
                     onChange={(e) => setSrcUrl(e.target.value)}
-                    placeholder="https://familysearch..."
-                    className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    placeholder="https://familysearch... o Supabase URL"
+                    className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   />
                 </div>
               </div>
 
+              {/* Supabase Document Upload */}
+              <div className="bg-white dark:bg-[#0F172A] p-3 rounded-2xl border border-[#E5E2D9] dark:border-[#334155] space-y-2">
+                <label className="block text-[11px] font-sans font-bold uppercase tracking-wider text-[#434331] dark:text-[#F1F5F9] flex items-center space-x-1">
+                  <HardDrive className="w-3.5 h-3.5 text-[#5A5A40] dark:text-amber-400" />
+                  <span>Subir Documento Digitalizado a Supabase (Opcional)</span>
+                </label>
+
+                <ImageUploadDropzone
+                  currentUrl={srcUrl}
+                  treeId={activeTree?.id || 'default_tree'}
+                  uploadType="document"
+                  label="Subir acta o documento digitalizado"
+                  sublabel="PDF, JPG, PNG archivado en Supabase Storage"
+                  onUploadComplete={(res) => setSrcUrl(res.publicUrl)}
+                />
+              </div>
+
               <div>
-                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Notas & Transcripción</label>
+                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                  Notas & Transcripción
+                </label>
                 <textarea
                   value={srcNotes}
                   onChange={(e) => setSrcNotes(e.target.value)}
                   placeholder="Texto literal del documento o anotaciones genealógicas..."
                   rows={3}
-                  className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 />
               </div>
 

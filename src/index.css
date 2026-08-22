@@ -1,9 +1,12 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
     --color-bg-base: #F5F2ED;
     --color-bg-surface: #FDFBF7;
+    --color-bg-card: #FFFFFF;
     --color-bg-pill: #E5E2D9;
     --color-border-subtle: #E5E2D9;
     --color-border-main: #D1CEC7;
@@ -13,12 +16,44 @@
     --color-text-muted: #9A968A;
     --color-brand-olive: #5A5A40;
     --color-brand-terracotta: #A65D47;
+    --color-brand-gold: #D97706;
+    --color-brand-emerald: #059669;
+  }
+
+  .dark {
+    --color-bg-base: #0B0F17;
+    --color-bg-surface: #111827;
+    --color-bg-card: #1A2234;
+    --color-bg-pill: #1F293D;
+    --color-border-subtle: #243048;
+    --color-border-main: #334155;
+    --color-text-main: #F1F5F9;
+    --color-text-header: #F8FAFC;
+    --color-text-secondary: #94A3B8;
+    --color-text-muted: #64748B;
+    --color-brand-olive: #38BDF8;
+    --color-brand-terracotta: #F97316;
+    --color-brand-gold: #FBBF24;
+    --color-brand-emerald: #34D399;
   }
 
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: #F5F2ED;
     color: #2C2C2C;
+    overflow-x: hidden;
+    max-width: 100vw;
+    transition: background-color 0.25s ease, color 0.25s ease;
+  }
+
+  .dark body, body.dark-mode {
+    background-color: #0B0F17;
+    color: #F1F5F9;
+  }
+
+  html {
+    overflow-x: hidden;
+    max-width: 100vw;
   }
 
   h1, h2, h3, .font-serif {
@@ -29,11 +64,61 @@
 /* Custom Tree Canvas Grid Pattern */
 .bg-natural-grid {
   background-color: #F5F2ED;
-  background-image: radial-gradient(#D1CEC7 1px, transparent 1px);
-  background-size: 20px 20px;
+  background-image: radial-gradient(#D1CEC7 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
 }
 
-/* Custom scrollbar for natural look */
+.dark .bg-natural-grid,
+.dark-mode .bg-natural-grid {
+  background-color: #0B0F17;
+  background-image: radial-gradient(#243048 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Gamified Glow & Badge Effects */
+.glow-gold {
+  box-shadow: 0 0 15px -2px rgba(245, 158, 11, 0.45);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 15px -2px rgba(16, 185, 129, 0.45);
+}
+
+.glow-sapphire {
+  box-shadow: 0 0 15px -2px rgba(59, 130, 246, 0.45);
+}
+
+.glow-amethyst {
+  box-shadow: 0 0 15px -2px rgba(168, 85, 247, 0.45);
+}
+
+.glow-ruby {
+  box-shadow: 0 0 15px -2px rgba(239, 68, 68, 0.45);
+}
+
+/* Shimmer animation for special badges */
+@keyframes goldShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-gold-shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(251,191,36,0.25) 50%, rgba(255,255,255,0) 100%);
+  background-size: 200% 100%;
+  animation: goldShimmer 3s infinite;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -43,11 +128,24 @@
   background: #F5F2ED;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: #0F172A;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #D1CEC7;
   border-radius: 9999px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #9A968A;
 }
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+

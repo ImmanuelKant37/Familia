@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, Save, User, Calendar, MapPin, Briefcase, Globe, Shield, Tag, Trash2 } from 'lucide-react';
+import { X, Save, User, Calendar, MapPin, Briefcase, Globe, Shield, Tag, Trash2, Camera } from 'lucide-react';
 import { Person, Gender, CertaintyLevel } from '../../types';
+import { ImageUploadDropzone } from '../common/ImageUploadDropzone';
 
 interface PersonFormModalProps {
   person: Person | null; // null = create new
@@ -314,26 +315,33 @@ export const PersonFormModal: React.FC<PersonFormModalProps> = ({
             </div>
           </div>
 
-          {/* URL Avatar & Apodos */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#7C796F] mb-1">URL Fotografía / Retrato</label>
-              <input
-                type="url"
-                value={avatarUrl}
-                onChange={e => setAvatarUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2 text-[#434331]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-[#7C796F] mb-1">Apodos o Nombres Alternativos</label>
+          {/* Fotografía a Supabase & Apodos */}
+          <div className="bg-white dark:bg-[#1E293B] p-4 rounded-2xl border border-[#E5E2D9] dark:border-[#334155] space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[#434331] dark:text-[#F1F5F9] flex items-center space-x-1.5 font-serif">
+              <Camera className="w-4 h-4 text-[#5A5A40] dark:text-amber-400" />
+              <span>Fotografía / Retrato Histórico (Supabase Storage)</span>
+            </h4>
+
+            <ImageUploadDropzone
+              currentUrl={avatarUrl}
+              personId={person?.id || 'new'}
+              treeId={person?.treeId || 'tree'}
+              uploadType="avatar"
+              label="Subir retrato familiar a Supabase"
+              sublabel="Carga directa a Supabase Storage con compresión y acceso público"
+              onUploadComplete={(res) => setAvatarUrl(res.publicUrl)}
+            />
+
+            <div className="pt-2">
+              <label className="block text-xs font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                Apodos o Nombres Alternativos
+              </label>
               <input
                 type="text"
                 value={aliasesStr}
                 onChange={e => setAliasesStr(e.target.value)}
-                placeholder="Ej: Don Mateo, El Abuelo"
-                className="w-full bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2 text-[#434331]"
+                placeholder="Ej: Don Mateo, El Abuelo, Tatita"
+                className="w-full bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2 text-[#434331] dark:text-[#F1F5F9]"
               />
             </div>
           </div>

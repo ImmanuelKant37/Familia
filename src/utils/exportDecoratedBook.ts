@@ -67,16 +67,33 @@ export const generateGenealogyBookPDF = (
   doc.setFillColor(245, 242, 237); // #F5F2ED
   doc.roundedRect(margin + 5, margin + 25, contentWidth - 10, pageHeight - margin * 2 - 50, 4, 4, 'F');
 
-  // Heraldic seal / Top ornament
-  doc.setFont('times', 'bold');
-  doc.setFontSize(28);
-  doc.setTextColor(67, 67, 49); // #434331
-  doc.text('✦ ✦ ✦', pageWidth / 2, margin + 45, { align: 'center' });
+  // Heraldic seal / Top ornament drawn with vector graphics
+  doc.setDrawColor(166, 93, 71); // #A65D47
+  doc.setLineWidth(0.7);
+  // Center ornamental diamond and wing lines
+  const cx = pageWidth / 2;
+  const cy = margin + 42;
+  doc.line(cx - 35, cy, cx - 12, cy);
+  doc.line(cx + 12, cy, cx + 35, cy);
+  
+  // Center diamond seal
+  doc.setFillColor(90, 90, 64);
+  doc.lines([
+    [0, -4],
+    [4, 0],
+    [0, 4],
+    [-4, 0]
+  ], cx - 4, cy, [1, 1], 'FD');
 
-  doc.setFontSize(11);
-  doc.setFont('times', 'italic');
+  // Small accent dots
+  doc.setFillColor(166, 93, 71);
+  doc.circle(cx - 18, cy, 0.8, 'F');
+  doc.circle(cx + 18, cy, 0.8, 'F');
+
+  doc.setFontSize(10.5);
+  doc.setFont('times', 'bold');
   doc.setTextColor(166, 93, 71); // #A65D47
-  doc.text('MEMORIAS Y ÁRBOL GENEALÓGICO DE LA DINASTÍA', pageWidth / 2, margin + 60, { align: 'center' });
+  doc.text('MEMORIAS Y ARBOL GENEALOGICO FAMILIAR', pageWidth / 2, margin + 58, { align: 'center' });
 
   // Main Tree Title
   doc.setFontSize(24);
@@ -106,14 +123,14 @@ export const generateGenealogyBookPDF = (
   doc.setFontSize(9);
   doc.setFont('times', 'normal');
   doc.setTextColor(124, 121, 111);
-  doc.text(`Total de Miembros Registrados: ${people.length}  •  Antepasados: ${ancestorCount}  •  Generaciones Vivas: ${livingCount}`, pageWidth / 2, margin + 145, { align: 'center' });
-  doc.text(`Apellidos Principales: ${surnamesList.slice(0, 6).join(' • ')}`, pageWidth / 2, margin + 152, { align: 'center' });
+  doc.text(`Total de Miembros Registrados: ${people.length}  |  Antepasados: ${ancestorCount}  |  Generaciones Vivas: ${livingCount}`, pageWidth / 2, margin + 145, { align: 'center' });
+  doc.text(`Apellidos Principales: ${surnamesList.slice(0, 6).join(' - ')}`, pageWidth / 2, margin + 152, { align: 'center' });
 
   if (options?.dedication) {
     doc.setFont('times', 'italic');
     doc.setFontSize(10);
     doc.setTextColor(90, 90, 64);
-    const dedLines = doc.splitTextToSize(`«${options.dedication}»`, contentWidth - 40);
+    const dedLines = doc.splitTextToSize(`"${options.dedication}"`, contentWidth - 40);
     doc.text(dedLines, pageWidth / 2, margin + 175, { align: 'center' });
   }
 
@@ -232,7 +249,7 @@ export const generateGenealogyBookPDF = (
     doc.setFont('times', 'italic');
     doc.setFontSize(8);
     doc.setTextColor(166, 93, 71);
-    const tag = isPlaceholder ? 'Nodo Puente' : person.isLiving ? '• Persona Viva' : `• Certeza: ${person.certainty}`;
+    const tag = isPlaceholder ? 'Nodo Puente' : person.isLiving ? '- Persona Viva' : `- Certeza: ${person.certainty}`;
     doc.text(tag, pageWidth - margin - 4, y + 6, { align: 'right' });
 
     // Dates line
@@ -281,7 +298,7 @@ export const generateGenealogyBookPDF = (
       doc.setFont('times', 'bold');
       doc.setFontSize(10);
       doc.setTextColor(166, 93, 71);
-      doc.text(`✦ ${ev.date || ev.dateApprox || 'S/F'}: ${ev.title}`, margin + 2, y);
+      doc.text(`[x] ${ev.date || ev.dateApprox || 'S/F'}: ${ev.title}`, margin + 2, y);
 
       doc.setFont('times', 'normal');
       doc.setFontSize(8.5);
@@ -497,7 +514,7 @@ export const generateDecoratedJsonBook = (
     _generatedAt: new Date().toISOString(),
     bookMetadata: {
       title: tree.name,
-      subtitle: tree.description || 'Crónica Dinástica y Árbol Genealógico Familiar',
+      subtitle: tree.description || 'Crónica Histórica y Árbol Genealógico Familiar',
       custodian: tree.ownerName || 'Familia',
       stats: {
         totalPeople: people.length,

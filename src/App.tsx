@@ -6,6 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TreeProvider, useTree } from './context/TreeContext';
+import { GamificationProvider, useGamification } from './context/GamificationContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Header } from './components/common/Header';
 import { AuthScreen } from './components/auth/AuthScreen';
 import { InteractiveTreeView } from './components/tree/InteractiveTreeView';
@@ -25,6 +27,17 @@ import { SearchModal } from './components/search/SearchModal';
 import { GenealogyBookModal } from './components/export/GenealogyBookModal';
 import { SurnameStylerModal } from './components/tree/SurnameStylerModal';
 import { GitVersionModal } from './components/git/GitVersionModal';
+import { GamificationDashboardModal } from './components/gamification/GamificationDashboardModal';
+import { AchievementToast } from './components/gamification/AchievementToast';
+import { FamilyLobbyProvider, useFamilyLobby } from './context/FamilyLobbyContext';
+import { FamilyLobbyModal } from './components/lobby/FamilyLobbyModal';
+import { FamilyPublicProfileModal } from './components/lobby/FamilyPublicProfileModal';
+import { RequestAccessModal } from './components/lobby/RequestAccessModal';
+import { FamilyPermissionsManagerModal } from './components/lobby/FamilyPermissionsManagerModal';
+import { MyAccessesModal } from './components/lobby/MyAccessesModal';
+import { ConnectFamiliesModal } from './components/lobby/ConnectFamiliesModal';
+import { SupabaseSqlModal } from './components/supabase/SupabaseSqlModal';
+import { GenealogyChatAssistantModal } from './components/tree/GenealogyChatAssistantModal';
 import { Person } from './types';
 import { TreePine, RefreshCw } from 'lucide-react';
 
@@ -35,6 +48,15 @@ const MainAppContent: React.FC = () => {
     undo, redo
   } = useTree();
   const { currentUser, loading } = useAuth();
+  const { openGamificationModal } = useGamification();
+  const { 
+    isLobbyOpen, 
+    isPublicProfileOpen, 
+    isRequestAccessModalOpen, 
+    isPermissionsManagerOpen, 
+    isMyAccessesModalOpen, 
+    isConnectFamiliesModalOpen 
+  } = useFamilyLobby();
 
   // Navigation View State
   const [activeTab, setActiveTab] = useState<'tree' | 'timeline' | 'map' | 'media' | 'sources' | 'audit'>('tree');
@@ -60,6 +82,8 @@ const MainAppContent: React.FC = () => {
     tab: 'settings'
   });
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showSupabaseSqlModal, setShowSupabaseSqlModal] = useState(false);
+  const [showChatAssistantModal, setShowChatAssistantModal] = useState(false);
 
   // Global Keyboard Shortcuts (⌘K Search, Delete, ⌘Z Undo, ⌘⇧Z / ⌘Y Redo)
   useEffect(() => {
@@ -205,7 +229,7 @@ const MainAppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F2ED] text-[#2C2C2C] flex flex-col font-sans selection:bg-[#5A5A40] selection:text-white">
+    <div className="min-h-screen bg-[#F5F2ED] dark:bg-[#0B0F17] text-[#2C2C2C] dark:text-[#F1F5F9] flex flex-col font-sans selection:bg-[#5A5A40] dark:selection:bg-[#38BDF8] selection:text-white transition-colors duration-200">
       
       {/* Global Navigation Header */}
       <Header
@@ -220,6 +244,9 @@ const MainAppContent: React.FC = () => {
         onOpenBookModal={() => setShowBookModal(true)}
         onOpenSurnameStyles={() => setShowSurnameModal(true)}
         onOpenGitModal={(tab) => setGitModalState({ open: true, tab: tab || 'history' })}
+        onOpenGamification={(tab) => openGamificationModal(tab)}
+        onOpenSupabaseSql={() => setShowSupabaseSqlModal(true)}
+        onOpenChatAssistant={() => setShowChatAssistantModal(true)}
       />
 
       {/* Main Viewport */}
@@ -235,6 +262,7 @@ const MainAppContent: React.FC = () => {
             onOpenBookModal={() => setShowBookModal(true)}
             onOpenSurnameStyles={() => setShowSurnameModal(true)}
             onOpenGitModal={(tab) => setGitModalState({ open: true, tab: tab || 'history' })}
+            onOpenChatAssistant={() => setShowChatAssistantModal(true)}
           />
         )}
 
@@ -377,16 +405,62 @@ const MainAppContent: React.FC = () => {
           onClose={() => setGitModalState({ open: false, tab: 'history' })}
         />
       )}
+
+      {/* 12. Gamification & Lineage Achievements Modal */}
+      <GamificationDashboardModal />
+
+      {/* 13. Gamification Real-time Toast Notifications */}
+      <AchievementToast />
+
+      {/* 14. Family Lobby & Discovery Modal */}
+      {isLobbyOpen && <FamilyLobbyModal />}
+
+      {/* 15. Family Public Profile Detailed Sheet */}
+      {isPublicProfileOpen && <FamilyPublicProfileModal />}
+
+      {/* 16. Granular Request Access Modal */}
+      {isRequestAccessModalOpen && <RequestAccessModal />}
+
+      {/* 17. Owner Permissions & Collaboration Manager Modal */}
+      {isPermissionsManagerOpen && <FamilyPermissionsManagerModal />}
+
+      {/* 18. User Access Dashboard ("Mis Accesos") */}
+      {isMyAccessesModalOpen && <MyAccessesModal />}
+
+      {/* 19. Connect Families Proposal Modal */}
+      {isConnectFamiliesModalOpen && <ConnectFamiliesModal />}
+
+      {/* 20. Supabase Storage & SQL Setup Modal */}
+      {showSupabaseSqlModal && (
+        <SupabaseSqlModal onClose={() => setShowSupabaseSqlModal(false)} />
+      )}
+
+      {/* 21. NLP Genealogy Chat Assistant Modal */}
+      {showChatAssistantModal && (
+        <GenealogyChatAssistantModal
+          onClose={() => setShowChatAssistantModal(false)}
+          onSelectPerson={(personId) => {
+            const p = people.find(item => item.id === personId);
+            if (p) handleOpenDetailModal(p);
+          }}
+        />
+      )}
     </div>
   );
 };
 
 export default function App() {
   return (
-    <AuthProvider>
-      <TreeProvider>
-        <MainAppContent />
-      </TreeProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <TreeProvider>
+          <GamificationProvider>
+            <FamilyLobbyProvider>
+              <MainAppContent />
+            </FamilyLobbyProvider>
+          </GamificationProvider>
+        </TreeProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

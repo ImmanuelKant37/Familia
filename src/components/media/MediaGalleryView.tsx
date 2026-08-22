@@ -2,10 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { 
   Image as ImageIcon, FileText, Upload, 
   Search, Calendar, MapPin, Tag, Plus, 
-  Lock, Globe, Users, Download, X, MessageSquare, Trash2
+  Lock, Globe, Users, Download, X, MessageSquare, Trash2, Database, Sparkles
 } from 'lucide-react';
 import { useTree } from '../../context/TreeContext';
 import { MediaItem, MediaType, MediaVisibility } from '../../types';
+import { ImageUploadDropzone } from '../common/ImageUploadDropzone';
+import { SupabaseSqlModal } from '../supabase/SupabaseSqlModal';
 
 interface MediaGalleryViewProps {
   onSelectPersonById: (personId: string) => void;
@@ -14,13 +16,14 @@ interface MediaGalleryViewProps {
 export const MediaGalleryView: React.FC<MediaGalleryViewProps> = ({
   onSelectPersonById
 }) => {
-  const { media, people, addMedia, deleteMedia, comments, addComment, canEdit } = useTree();
+  const { media, people, addMedia, deleteMedia, comments, addComment, canEdit, activeTree } = useTree();
 
   const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMediaModal, setActiveMediaModal] = useState<MediaItem | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showSqlModal, setShowSqlModal] = useState(false);
   const [commentText, setCommentText] = useState('');
 
   // Upload Form State
@@ -115,25 +118,35 @@ export const MediaGalleryView: React.FC<MediaGalleryViewProps> = ({
     <div className="max-w-7xl mx-auto px-4 py-8 font-sans">
       
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-[#FDFBF7] p-5 rounded-3xl border border-[#D1CEC7] shadow-xs">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-[#FDFBF7] dark:bg-[#1E293B] p-5 rounded-3xl border border-[#D1CEC7] dark:border-[#334155] shadow-xs">
         <div>
-          <h2 className="font-serif text-2xl font-bold text-[#434331]">
+          <h2 className="font-serif text-2xl font-bold text-[#434331] dark:text-[#F1F5F9]">
             Galería & Archivo Histórico
           </h2>
-          <p className="text-xs text-[#7C796F] mt-1 font-serif italic">
-            Preservación de fotografías antiguas, actas parroquiales, cartas y testimonios documentales.
+          <p className="text-xs text-[#7C796F] dark:text-[#94A3B8] mt-1 font-serif italic">
+            Preservación de fotografías antiguas, actas parroquiales, cartas y testimonios documentales en Supabase.
           </p>
         </div>
 
-        {canEdit && (
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={() => setShowUploadModal(true)}
-            className="bg-[#5A5A40] hover:bg-[#434331] text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 rounded-full flex items-center space-x-1.5 shadow-2xs transition-colors self-start md:self-auto"
+            onClick={() => setShowSqlModal(true)}
+            className="bg-white dark:bg-[#0F172A] hover:bg-[#F5F2ED] dark:hover:bg-[#334155] text-[#5A5A40] dark:text-amber-400 border border-[#D1CEC7] dark:border-[#475569] text-xs font-semibold uppercase tracking-wider px-3.5 py-2 rounded-full flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer"
           >
-            <Upload className="w-4 h-4" />
-            <span>Subir Documento o Foto</span>
+            <Database className="w-3.5 h-3.5" />
+            <span>Scripts SQL Supabase</span>
           </button>
-        )}
+
+          {canEdit && (
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="bg-[#5A5A40] hover:bg-[#434331] text-white text-xs font-semibold uppercase tracking-wider px-4 py-2 rounded-full flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer"
+            >
+              <Upload className="w-4 h-4" />
+              <span>Subir a Supabase</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -385,13 +398,20 @@ export const MediaGalleryView: React.FC<MediaGalleryViewProps> = ({
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#FDFBF7] rounded-3xl p-6 max-w-lg w-full border border-[#D1CEC7] shadow-2xl">
-            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#E5E2D9]">
-              <h3 className="font-serif font-bold text-lg text-[#434331]">Cargar Documento o Fotografía</h3>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#FDFBF7] dark:bg-[#1E293B] rounded-3xl p-6 max-w-lg w-full border border-[#D1CEC7] dark:border-[#334155] shadow-2xl my-auto">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#E5E2D9] dark:border-[#334155]">
+              <div>
+                <h3 className="font-serif font-bold text-lg text-[#434331] dark:text-[#F1F5F9]">
+                  Cargar Documento o Fotografía a Supabase
+                </h3>
+                <p className="text-xs text-[#7C796F] dark:text-[#94A3B8]">
+                  Almacenamiento persistente en Supabase Storage con URL pública
+                </p>
+              </div>
               <button
                 onClick={() => setShowUploadModal(false)}
-                className="text-[#7C796F] hover:text-[#434331] p-1 rounded-full"
+                className="text-[#7C796F] hover:text-[#434331] dark:text-[#94A3B8] dark:hover:text-white p-1 rounded-full cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -399,61 +419,67 @@ export const MediaGalleryView: React.FC<MediaGalleryViewProps> = ({
 
             <form onSubmit={handleCreateMedia} className="space-y-3">
               <div>
-                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Seleccionar Archivo / Imagen *</label>
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={handleFileUpload}
-                  className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2 text-[#434331]"
+                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                  Archivo / Fotografía / Documento *
+                </label>
+                <ImageUploadDropzone
+                  currentUrl={uploadUrl}
+                  treeId={activeTree?.id || 'default_tree'}
+                  personId={uploadPersonId || 'general'}
+                  uploadType={uploadType === 'photo' ? 'media' : 'document'}
+                  label="Subir a Supabase Storage"
+                  sublabel="Soporta imágenes JPG/PNG y documentos escaneados o PDF"
+                  onUploadComplete={(res) => {
+                    setUploadUrl(res.publicUrl);
+                    if (!uploadTitle && res.filePath) {
+                      const cleanName = res.filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || '';
+                      if (cleanName) setUploadTitle(cleanName);
+                    }
+                  }}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">O pegar URL de imagen</label>
-                <input
-                  type="url"
-                  value={uploadUrl}
-                  onChange={(e) => setUploadUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Título o Nombre del Archivo *</label>
+                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                  Título o Nombre del Archivo *
+                </label>
                 <input
                   type="text"
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
-                  placeholder="Ej: Retrato familiar en Sevilla"
+                  placeholder="Ej: Retrato familiar en Sevilla, Acta de Bautismo 1892"
                   required
-                  className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Tipo de Archivo</label>
+                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                    Tipo de Archivo
+                  </label>
                   <select
                     value={uploadType}
                     onChange={(e) => setUploadType(e.target.value as MediaType)}
-                    className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   >
                     <option value="photo">Fotografía</option>
                     <option value="certificate">Acta o Certificado</option>
                     <option value="letter">Carta o Manuscrito</option>
                     <option value="passport">Pasaporte / Identificación</option>
                     <option value="newspaper">Prensa / Recorte</option>
-                    <option value="other">Otro</option>
+                    <option value="other">Otro Documento</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Visibilidad</label>
+                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                    Visibilidad
+                  </label>
                   <select
                     value={uploadVisibility}
                     onChange={(e) => setUploadVisibility(e.target.value as MediaVisibility)}
-                    className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   >
                     <option value="public">Público (Todos)</option>
                     <option value="private">Privado (Solo Familia)</option>
@@ -463,34 +489,40 @@ export const MediaGalleryView: React.FC<MediaGalleryViewProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Fecha Histórica</label>
+                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                    Fecha Histórica
+                  </label>
                   <input
                     type="text"
                     value={uploadDate}
                     onChange={(e) => setUploadDate(e.target.value)}
                     placeholder="Ej: 1924 ó c. 1920"
-                    className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Lugar</label>
+                  <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                    Lugar
+                  </label>
                   <input
                     type="text"
                     value={uploadPlace}
                     onChange={(e) => setUploadPlace(e.target.value)}
                     placeholder="Ej: Madrid, España"
-                    className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                    className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Persona Asociada</label>
+                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                  Persona Asociada (Opcional)
+                </label>
                 <select
                   value={uploadPersonId}
                   onChange={(e) => setUploadPersonId(e.target.value)}
-                  className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 >
                   <option value="">Ninguna o general del árbol</option>
                   {people.map(p => (
@@ -502,34 +534,42 @@ export const MediaGalleryView: React.FC<MediaGalleryViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] mb-1">Etiquetas (separadas por coma)</label>
+                <label className="block text-xs font-sans font-bold uppercase tracking-wider text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                  Etiquetas (separadas por coma)
+                </label>
                 <input
                   type="text"
                   value={uploadTagsStr}
                   onChange={(e) => setUploadTagsStr(e.target.value)}
                   placeholder="Ej: Boda, Retrato, Inmigración"
-                  className="w-full text-xs bg-[#F5F2ED] border border-[#D1CEC7] rounded-xl p-2.5 text-[#434331] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
+                  className="w-full text-xs bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl p-2.5 text-[#434331] dark:text-[#F1F5F9] focus:ring-2 focus:ring-[#5A5A40] focus:outline-none"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="pt-3 flex justify-end space-x-2 border-t border-[#E5E2D9] dark:border-[#334155]">
                 <button
                   type="button"
                   onClick={() => setShowUploadModal(false)}
-                  className="px-4 py-2 text-xs font-medium text-[#7C796F] hover:bg-[#E5E2D9] rounded-full"
+                  className="px-4 py-2 text-xs font-medium text-[#7C796F] hover:bg-[#E5E2D9] dark:hover:bg-[#334155] rounded-full cursor-pointer"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#5A5A40] hover:bg-[#434331] text-white px-5 py-2 rounded-full text-xs font-semibold uppercase tracking-wider shadow-xs"
+                  disabled={!uploadUrl || !uploadTitle.trim()}
+                  className="bg-[#5A5A40] hover:bg-[#434331] disabled:opacity-50 text-white px-5 py-2 rounded-full text-xs font-semibold uppercase tracking-wider shadow-xs cursor-pointer"
                 >
-                  Guardar Archivo
+                  Guardar en Árbol
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Supabase SQL Scripts Modal */}
+      {showSqlModal && (
+        <SupabaseSqlModal onClose={() => setShowSqlModal(false)} />
       )}
     </div>
   );

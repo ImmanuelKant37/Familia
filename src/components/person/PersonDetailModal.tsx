@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   X, Edit3, Trash2, Plus, Calendar, MapPin, 
   Briefcase, Globe, Heart, Users, FileText, 
   Image as ImageIcon, BookOpen, MessageSquare, 
-  Sparkles, CheckCircle, Send, ArrowRight
+  Sparkles, CheckCircle, Send, ArrowRight, Camera, Upload, Loader2
 } from 'lucide-react';
 import { Person, CertaintyLevel } from '../../types';
 import { useTree } from '../../context/TreeContext';
 import { useAuth } from '../../context/AuthContext';
+import { CompletenessMeter } from '../gamification/CompletenessMeter';
+import { SupabaseStorageService } from '../../services/supabaseStorageService';
+import { ImageUploadDropzone } from '../common/ImageUploadDropzone';
 
 interface PersonDetailModalProps {
   person: Person | null;
@@ -27,11 +30,46 @@ export const PersonDetailModal: React.FC<PersonDetailModalProps> = ({
   const { 
     people, relationships, events, media, sources, comments, 
     deletePerson, deleteRelationship, addComment, submitProposal,
-    getSanitizedPerson, canEdit, canManage 
+    getSanitizedPerson, canEdit, canManage, updatePerson, addMedia, activeTree 
   } = useTree();
   const { isPublicMode } = useAuth();
 
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [showAddMediaInline, setShowAddMediaInline] = useState(false);
+  const [inlineMediaTitle, setInlineMediaTitle] = useState('');
+  const [inlineMediaUrl, setInlineMediaUrl] = useState('');
+  const [inlineMediaType, setInlineMediaType] = useState<'photo' | 'document' | 'certificate'>('photo');
+
   const [activeTab, setActiveTab] = useState<'info' | 'family' | 'events' | 'media' | 'sources' | 'comments' | 'proposal'>('info');
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !person || !canEdit) return;
+
+    setIsUploadingAvatar(true);
+    try {
+      const result = await SupabaseStorageService.uploadPersonAvatar(
+        file, 
+        person.id, 
+        activeTree?.id || person.treeId || 'default_tree'
+      );
+
+      if (result.publicUrl) {
+        await updatePerson({
+          ...person,
+          avatarUrl: result.publicUrl
+        });
+      }
+    } catch (err) {
+      console.error('Error uploading avatar:', err);
+    } finally {
+      setIsUploadingAvatar(false);
+      if (avatarFileInputRef.current) {
+        avatarFileInputRef.current.value = '';
+      }
+    }
+  };
   const [newComment, setNewComment] = useState('');
   const [proposalField, setProposalField] = useState('Fecha de nacimiento');
   const [proposalValue, setProposalValue] = useState('');
@@ -149,9 +187,23 @@ export const PersonDetailModal: React.FC<PersonDetailModalProps> = ({
           </button>
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-4 sm:space-y-0 sm:space-x-5">
-            {/* Avatar */}
-            <div className="relative">
-              {sanitized.avatarUrl ? (
+            {/* Avatar with direct Supabase Storage upload */}
+            <div className="relative group/avatar shrink-0">
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                onChange={handleAvatarUpload}
+                className="hidden"
+                id={`detail-avatar-upload-${person.id}`}
+              />
+
+              {isUploadingAvatar ? (
+                <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-[#5A5A40] flex flex-col items-center justify-center text-white ring-4 ring-white/20">
+                  <Loader2 className="w-6 h-6 animate-spin text-amber-300" />
+                  <span className="text-[9px] mt-1 font-semibold">Subiendo...</span>
+                </div>
+              ) : sanitized.avatarUrl ? (
                 <img
                   src={sanitized.avatarUrl}
                   alt={sanitized.firstName}
@@ -162,10 +214,23 @@ export const PersonDetailModal: React.FC<PersonDetailModalProps> = ({
                   {sanitized.firstName.charAt(0)}
                 </div>
               )}
+
               {sanitized.isLiving && (
                 <span className="absolute bottom-1 right-1 bg-[#5A5A40] text-white p-1 rounded-full ring-2 ring-[#434331]" title="Persona viva">
                   <Heart className="w-3 h-3 fill-current" />
                 </span>
+              )}
+
+              {canEdit && !isUploadingAvatar && (
+                <button
+                  type="button"
+                  onClick={() => avatarFileInputRef.current?.click()}
+                  className="absolute inset-0 bg-black/50 opacity-0 group-hover/avatar:opacity-100 flex flex-col items-center justify-center transition-opacity rounded-2xl text-white cursor-pointer"
+                  title="Subir foto a Supabase"
+                >
+                  <Camera className="w-5 h-5 text-white" />
+                  <span className="text-[9px] font-bold uppercase mt-0.5">Supabase</span>
+                </button>
               )}
             </div>
 
@@ -349,6 +414,14 @@ export const PersonDetailModal: React.FC<PersonDetailModalProps> = ({
           {/* TAB 1: BIOGRAFIA & DATOS */}
           {activeTab === 'info' && (
             <div className="space-y-6">
+              {/* Completeness & Quality Score Bar */}
+              <CompletenessMeter 
+                person={person} 
+                relationships={relationships} 
+                media={media} 
+                sources={sources} 
+              />
+
               {/* Bio block */}
               <div>
                 <h3 className="text-xs font-sans font-bold uppercase tracking-widest text-[#7C796F] mb-2">
@@ -745,6 +818,83 @@ export const PersonDetailModal: React.FC<PersonDetailModalProps> = ({
           {/* TAB 4: MULTIMEDIA & DOCUMENTOS */}
           {activeTab === 'media' && (
             <div className="space-y-4">
+              {/* Header with Upload Action */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-sans font-bold uppercase tracking-widest text-[#7C796F] dark:text-[#94A3B8] flex items-center space-x-1.5">
+                  <ImageIcon className="w-3.5 h-3.5 text-[#5A5A40] dark:text-amber-400" />
+                  <span>Galería & Documentos Vinculados ({personMedia.length})</span>
+                </h3>
+
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMediaInline(!showAddMediaInline)}
+                    className="text-xs font-semibold text-[#5A5A40] dark:text-amber-400 hover:text-[#434331] dark:hover:text-amber-300 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{showAddMediaInline ? 'Ocultar Subida' : 'Subir a Supabase'}</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Inline Upload Dropzone */}
+              {showAddMediaInline && (
+                <div className="p-4 bg-white dark:bg-[#1E293B] rounded-2xl border border-[#E5E2D9] dark:border-[#334155] space-y-3 animate-in fade-in">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                        Título o Descripción del Archivo
+                      </label>
+                      <input
+                        type="text"
+                        value={inlineMediaTitle}
+                        onChange={e => setInlineMediaTitle(e.target.value)}
+                        placeholder="Ej: Retrato de boda, Acta de bautismo, etc."
+                        className="w-full bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl px-3 py-1.5 text-xs text-[#434331] dark:text-[#F1F5F9]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#7C796F] dark:text-[#94A3B8] mb-1">
+                        Tipo de Archivo
+                      </label>
+                      <select
+                        value={inlineMediaType}
+                        onChange={e => setInlineMediaType(e.target.value as any)}
+                        className="w-full bg-[#F5F2ED] dark:bg-[#0F172A] border border-[#D1CEC7] dark:border-[#334155] rounded-xl px-3 py-1.5 text-xs text-[#434331] dark:text-[#F1F5F9]"
+                      >
+                        <option value="photo">Fotografía Familiar</option>
+                        <option value="document">Documento Histórico / PDF</option>
+                        <option value="certificate">Acta o Certificado</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <ImageUploadDropzone
+                    currentUrl={inlineMediaUrl}
+                    personId={person.id}
+                    treeId={person.treeId}
+                    uploadType={inlineMediaType === 'photo' ? 'media' : 'document'}
+                    label={`Subir ${inlineMediaType === 'photo' ? 'fotografía' : 'documento'} a Supabase`}
+                    sublabel="Archivado seguro en Supabase Storage con URL permanente"
+                    onUploadComplete={async (res) => {
+                      setInlineMediaUrl(res.publicUrl);
+                      if (res.publicUrl) {
+                        await addMedia({
+                          treeId: person.treeId,
+                          title: inlineMediaTitle.trim() || `Documento de ${person.firstName}`,
+                          url: res.publicUrl,
+                          type: inlineMediaType,
+                          relatedPersonIds: [person.id]
+                        });
+                        setInlineMediaTitle('');
+                        setInlineMediaUrl('');
+                        setShowAddMediaInline(false);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
               {personMedia.length === 0 ? (
                 <div className="text-center py-8 text-[#9A968A] text-sm font-serif italic">
                   No hay fotografías ni documentos históricos asociados a esta persona.
@@ -752,17 +902,24 @@ export const PersonDetailModal: React.FC<PersonDetailModalProps> = ({
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {personMedia.map(m => (
-                    <div key={m.id} className="group relative rounded-2xl border border-[#E5E2D9] overflow-hidden bg-white shadow-2xs">
-                      <div className="aspect-4/3 bg-[#E5E2D9] overflow-hidden">
-                        <img
-                          src={m.url}
-                          alt={m.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
+                    <div key={m.id} className="group relative rounded-2xl border border-[#E5E2D9] dark:border-[#334155] overflow-hidden bg-white dark:bg-[#1E293B] shadow-2xs">
+                      <div className="aspect-4/3 bg-[#E5E2D9] dark:bg-[#0F172A] overflow-hidden flex items-center justify-center">
+                        {m.type === 'document' || m.type === 'certificate' ? (
+                          <div className="flex flex-col items-center justify-center p-4 text-[#5A5A40] dark:text-amber-400">
+                            <FileText className="w-8 h-8 mb-1" />
+                            <span className="text-[10px] font-bold uppercase">{m.type}</span>
+                          </div>
+                        ) : (
+                          <img
+                            src={m.url}
+                            alt={m.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        )}
                       </div>
                       <div className="p-3">
-                        <h5 className="text-xs font-serif font-bold text-[#434331] truncate">{m.title}</h5>
-                        <p className="text-[10px] text-[#7C796F] truncate mt-0.5">
+                        <h5 className="text-xs font-serif font-bold text-[#434331] dark:text-[#F1F5F9] truncate">{m.title}</h5>
+                        <p className="text-[10px] text-[#7C796F] dark:text-[#94A3B8] truncate mt-0.5">
                           {m.historicalDate || 'Sin fecha'} • {m.historicalPlace || 'Lugar desconocido'}
                         </p>
                       </div>

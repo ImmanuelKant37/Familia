@@ -62,7 +62,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
   };
 
   const handleRestoreCommit = async (commit: TreeCommit) => {
-    const confirmMsg = `¿Deseas restaurar el árbol al estado del commit "${commit.message}"? (Generará un nuevo punto en el historial conservando la trazabilidad).`;
+    const confirmMsg = `¿Deseas restaurar el árbol al estado de la marca "${commit.message}"? (Generará una nueva traza en el historial conservando la trazabilidad).`;
     if (window.confirm(confirmMsg)) {
       await restoreCommit(commit.id);
     }
@@ -77,11 +77,11 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
           <div className="flex items-center space-x-2">
             <GitBranch className="w-6 h-6 text-[#5A5A40]" />
             <h2 className="font-serif text-2xl font-bold text-[#434331]">
-              Historial & Control de Versiones
+              Historial, Marcas & Trazabilidad
             </h2>
           </div>
           <p className="text-xs text-[#7C796F] mt-1 font-serif italic">
-            Trazabilidad inmutable de movimientos, identificación de autores, bifurcación en ramas y fusión de árboles.
+            Trazabilidad inmutable de movimientos, identificación de autores, bifurcación en ramas y marcas históricas.
           </p>
         </div>
 
@@ -120,7 +120,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
             className="text-xs bg-[#5A5A40] hover:bg-[#434331] text-white px-4 py-2 rounded-full font-sans font-semibold flex items-center space-x-1.5 transition-colors shadow-2xs cursor-pointer"
           >
             <GitCommit className="w-3.5 h-3.5" />
-            <span>Panel de Versiones & Ramas</span>
+            <span>Panel de Marcas & Ramas</span>
           </button>
         </div>
       </div>
@@ -137,7 +137,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
             }`}
           >
             <GitCommit className="w-4 h-4" />
-            <span>Puntos de Restauración ({commits.length})</span>
+            <span>Marcas de Guardado ({commits.length})</span>
           </button>
 
           <button
@@ -191,7 +191,7 @@ export const ChangeHistoryView: React.FC<ChangeHistoryViewProps> = ({
           <div className="relative pl-6 space-y-5 before:content-[''] before:absolute before:left-2.5 before:top-3 before:bottom-3 before:w-0.5 before:bg-[#D1CEC7]">
             {filteredCommits.length === 0 ? (
               <div className="p-8 text-center text-xs text-[#9A968A] font-serif italic">
-                No hay puntos de restauración registrados en esta rama todavía.
+                No hay marcas ni trazas registradas en esta rama todavía.
               </div>
             ) : (
               filteredCommits.map((commit) => {

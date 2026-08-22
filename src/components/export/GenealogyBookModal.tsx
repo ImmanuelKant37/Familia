@@ -385,9 +385,13 @@ export const GenealogyBookModal: React.FC<GenealogyBookModalProps> = ({ onClose 
                 
                 {/* Vintage Corner Ornaments */}
                 <div className="text-center border-b-2 border-[#A65D47] pb-6">
-                  <div className="text-2xl text-[#5A5A40] mb-1">✦ ✦ ✦</div>
+                  <div className="flex items-center justify-center space-x-2 text-[#A65D47] mb-2">
+                    <span className="w-12 h-px bg-[#A65D47]/40"></span>
+                    <span className="text-sm font-serif">❖ ❖ ❖</span>
+                    <span className="w-12 h-px bg-[#A65D47]/40"></span>
+                  </div>
                   <span className="text-xs font-sans uppercase tracking-widest text-[#A65D47] font-bold">
-                    MEMORIAS Y ÁRBOL GENEALÓGICO
+                    MEMORIAS Y ÁRBOL GENEALÓGICO FAMILIAR
                   </span>
                   <h1 className="text-2xl sm:text-3xl font-bold uppercase mt-2 text-[#434331]">
                     {coverTitle}
