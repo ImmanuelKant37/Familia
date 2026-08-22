@@ -1,4 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+import sharp from 'sharp';
+import fs from 'fs';
+import path from 'path';
+
+const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
   <defs>
     <!-- Background Gradient -->
     <radialGradient id="bgParchment" cx="50%" cy="40%" r="80%">
@@ -146,4 +150,36 @@
       ✦ Sincronización en la nube &amp; Acceso privado para toda la familia
     </text>
   </g>
-</svg>
+</svg>`;
+
+async function generateImages() {
+  const publicDir = path.resolve('public');
+  if (!fs.existsSync(publicDir)) {
+    fs.mkdirSync(publicDir, { recursive: true });
+  }
+
+  // Save SVG
+  fs.writeFileSync(path.join(publicDir, 'family-tree-og.svg'), svgContent, 'utf8');
+
+  // Convert to PNG 1200x630
+  await sharp(Buffer.from(svgContent))
+    .resize(1200, 630)
+    .png({ quality: 95, compressionLevel: 8 })
+    .toFile(path.join(publicDir, 'og-preview.png'));
+
+  // Also create a JPG version for WhatsApp compatibility (under 250kb)
+  await sharp(Buffer.from(svgContent))
+    .resize(1200, 630)
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toFile(path.join(publicDir, 'og-preview.jpg'));
+
+  // Also create square 600x600 avatar for WhatsApp thumbnail fallback
+  await sharp(Buffer.from(svgContent))
+    .resize(600, 600, { fit: 'cover' })
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toFile(path.join(publicDir, 'og-thumb.jpg'));
+
+  console.log('Successfully generated OG preview images in /public!');
+}
+
+generateImages().catch(console.error);
