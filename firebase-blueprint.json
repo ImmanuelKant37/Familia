@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profiles",
+      "description": "Registered users with profile and preferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLoginAt": { "type": "string" }
+      },
+      "required": ["userId", "email"]
+    },
+    "trees": {
+      "title": "Family Trees",
+      "description": "Independent genealogical trees",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["private", "shared", "public"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerId"]
+    },
+    "people": {
+      "title": "Person",
+      "description": "An individual in a family tree",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "treeId": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "gender": { "type": "string" },
+        "isLiving": { "type": "boolean" }
+      },
+      "required": ["id", "treeId", "firstName", "lastName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile documents"
+    },
+    "/trees/{treeId}": {
+      "schema": "trees",
+      "description": "Family tree documents"
+    },
+    "/trees/{treeId}/people/{personId}": {
+      "schema": "people",
+      "description": "People within a family tree"
+    }
+  }
+}
+

@@ -1,0 +1,53 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-bg-base: #F5F2ED;
+    --color-bg-surface: #FDFBF7;
+    --color-bg-pill: #E5E2D9;
+    --color-border-subtle: #E5E2D9;
+    --color-border-main: #D1CEC7;
+    --color-text-main: #2C2C2C;
+    --color-text-header: #434331;
+    --color-text-secondary: #7C796F;
+    --color-text-muted: #9A968A;
+    --color-brand-olive: #5A5A40;
+    --color-brand-terracotta: #A65D47;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #F5F2ED;
+    color: #2C2C2C;
+  }
+
+  h1, h2, h3, .font-serif {
+    font-family: 'Lora', Georgia, Cambria, 'Times New Roman', Times, serif;
+  }
+}
+
+/* Custom Tree Canvas Grid Pattern */
+.bg-natural-grid {
+  background-color: #F5F2ED;
+  background-image: radial-gradient(#D1CEC7 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Custom scrollbar for natural look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F2ED;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D1CEC7;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9A968A;
+}

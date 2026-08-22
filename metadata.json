@@ -1,0 +1,6 @@
+{
+  "name": "Árbol Genealógico Digital",
+  "description": "Plataforma web de árbol genealógico digital colaborativo para reconstruir, documentar y preservar la historia familiar con personas, relaciones, eventos, archivos y control de privacidad.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
